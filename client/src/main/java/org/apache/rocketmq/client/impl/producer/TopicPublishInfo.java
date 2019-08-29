@@ -66,16 +66,21 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
+    // 如果没有启用borker故障延迟机制，选择调用的队列
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
+        // lastBrokerName是上一次执行消息发送时选择失败的broker
+        // 在重试机制下，第一次执行消息发送时，lastBrokerName = null
         if (lastBrokerName == null) {
             return selectOneMessageQueue();
         } else {
             for (int i = 0; i < this.messageQueueList.size(); i++) {
+                // 如果选择的队列发送消息发送失败了，此时重试机制再次选择队列时lastBrokerName不为空
                 int index = this.sendWhichQueue.incrementAndGet();
                 int pos = Math.abs(index) % this.messageQueueList.size();
                 if (pos < 0)
                     pos = 0;
                 MessageQueue mq = this.messageQueueList.get(pos);
+                // 上面还是先循环选择一个队列，但是如果是上一次选择的失败的broker，则继续选择下一个
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }
@@ -85,7 +90,10 @@ public class TopicPublishInfo {
     }
 
     public MessageQueue selectOneMessageQueue() {
+        // sendWhichQueue是一个ThreadLocal，存储自增值，自增值第一次使用Random类随机取值
+        // 如果消息发送触发了重试机制，每次就自增取值
         int index = this.sendWhichQueue.incrementAndGet();
+        // 自增值和消息队列长度取模，目的是为了循环选择消息队列。
         int pos = Math.abs(index) % this.messageQueueList.size();
         if (pos < 0)
             pos = 0;

@@ -589,11 +589,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             MessageQueue mq = null;
             Exception exception = null;
             SendResult sendResult = null;
+            // 总共重试的次数，同步模式下默认3次，其他默认一次。可在 init producer时配置 retryTimesWhenSendFailed,默认为2
             int timesTotal = communicationMode == CommunicationMode.SYNC ? 1 + this.defaultMQProducer.getRetryTimesWhenSendFailed() : 1;
+            // 第几次发送
             int times = 0;
+            // 存储每次发送的时候选择的broker名字
             String[] brokersSent = new String[timesTotal];
+
+            // 如果失败了，可以重试发送
             for (; times < timesTotal; times++) {
                 String lastBrokerName = null == mq ? null : mq.getBrokerName();
+                // 选择本次要发送的队列
                 MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);
                 if (mqSelected != null) {
                     mq = mqSelected;
@@ -610,8 +616,13 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             break;
                         }
 
+                        // 调用发送消息的方法
                         sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
                         endTimestamp = System.currentTimeMillis();
+
+                        // updateFaultItem方法，在正常发送和异常后都会被调用
+                        // 如果是成功发送，第三个参数isolation=false；如果异常了，第三个参数isolation=true。
+                        // endTimestamp - beginTimestampPrev 等于消息发送需要用到的时间
                         this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
                         switch (communicationMode) {
                             case ASYNC:
@@ -619,6 +630,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             case ONEWAY:
                                 return null;
                             case SYNC:
+                                // 同步发送消息成功，但是存储消息失败，并且配置了存储失败时重新发送的开关时，进行重试，否则返回发送结果
                                 if (sendResult.getSendStatus() != SendStatus.SEND_OK) {
                                     if (this.defaultMQProducer.isRetryAnotherBrokerWhenNotStoreOK()) {
                                         continue;
