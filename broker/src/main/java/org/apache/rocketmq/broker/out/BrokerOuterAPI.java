@@ -146,6 +146,8 @@ public class BrokerOuterAPI {
                     @Override
                     public void run() {
                         try {
+                            // 发送心跳包，RequestCode是REGISTER_BROKER = 103
+                            // 对应的处理在namesrv的DefaultRequestProcessor.processRequest中进行处理
                             RegisterBrokerResult result = registerBroker(namesrvAddr, oneway, timeoutMills, requestHeader, body);
                             if (result != null) {
                                 registerBrokerResultList.add(result);
@@ -278,6 +280,9 @@ public class BrokerOuterAPI {
                             requestHeader.setBrokerId(brokerId);
                             requestHeader.setBrokerName(brokerName);
                             requestHeader.setClusterName(clusterName);
+
+                            // 请求namesrv对应的处理方法，QUERY_DATA_VERSION = 322
+                            // 在namesrv的DefaultRequestProcessor中会调用queryBrokerTopicConfig进行处理
                             RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.QUERY_DATA_VERSION, requestHeader);
                             request.setBody(topicConfigWrapper.getDataVersion().encode());
                             RemotingCommand response = remotingClient.invokeSync(namesrvAddr, request, timeoutMills);

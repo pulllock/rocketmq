@@ -95,7 +95,7 @@ public class MQFaultStrategy {
             return tpInfo.selectOneMessageQueue();
         }
 
-        // 如果没有启用borker故障延迟机制，也是默认的机制
+        // 如果没有启用broker故障延迟机制，也是默认的机制
         return tpInfo.selectOneMessageQueue(lastBrokerName);
     }
 

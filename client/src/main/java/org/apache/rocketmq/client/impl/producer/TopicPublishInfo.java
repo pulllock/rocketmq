@@ -66,7 +66,7 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
-    // 如果没有启用borker故障延迟机制，选择调用的队列
+    // 如果没有启用broker故障延迟机制，选择调用的队列
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
         // lastBrokerName是上一次执行消息发送时选择失败的broker
         // 在重试机制下，第一次执行消息发送时，lastBrokerName = null
