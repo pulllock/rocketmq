@@ -47,6 +47,11 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 
 /**
  * 路由信息表
+ *
+ * RocketMQ基于订阅发布机制，一个Topic拥有多个消息队列，一个Broker为每一主题默
+ * 认创建4个读队列4个写队列。多个Broker组成一个集群，BrokerName由相同的多台Broker
+ * 组成Master-Slave 架构，brokerId为0代表Master，大于0表示Slave 。BrokerLivelnfo 中的
+ * lastUpdateTimestamp存储上次收到Broker心跳包的时间。
  */
 public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
@@ -77,6 +82,10 @@ public class RouteInfoManager {
      * NameServer每次收到broker的心跳包就会更新该信息。
      */
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+
+    /**
+     * Broker上的FilterServer列表，用于类模式消息过滤
+     */
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -154,6 +163,8 @@ public class RouteInfoManager {
                     brokerData = new BrokerData(clusterName, brokerName, new HashMap<Long, String>());
                     this.brokerAddrTable.put(brokerName, brokerData);
                 }
+
+                // slave变成master的时候，需要将原来slave删除，然后添加成master
                 Map<Long, String> brokerAddrsMap = brokerData.getBrokerAddrs();
                 //Switch slave to master: first remove <1, IP:PORT> in namesrv, then add <0, IP:PORT>
                 //The same IP:PORT must only have one record in brokerAddrTable

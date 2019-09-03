@@ -887,7 +887,7 @@ public class BrokerController {
             // 第一次启动，这里会强制执行发送心跳包
             this.registerBrokerAll(true, false, true);
         }
-        // 定时任务，定时向路由中心发送心跳包
+        // 定时任务，定时向路由中心发送心跳包，默认30秒
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
