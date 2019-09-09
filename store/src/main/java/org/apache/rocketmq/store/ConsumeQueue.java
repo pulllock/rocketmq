@@ -28,6 +28,12 @@ import org.apache.rocketmq.store.config.StorePathConfigHelper;
 public class ConsumeQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    /**
+     * ConsumeQueue每个条目的大小，20字节
+     * 8字节的commitlog offset
+     * 4字节的大小
+     * 8字节的tag hashcode
+     */
     public static final int CQ_STORE_UNIT_SIZE = 20;
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
@@ -152,7 +158,13 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据消息存储时间来查找
+     * @param timestamp
+     * @return
+     */
     public long getOffsetInQueueByTime(final long timestamp) {
+        // 根据时间戳定位到物理文件
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
@@ -166,6 +178,7 @@ public class ConsumeQueue {
                 ByteBuffer byteBuffer = sbr.getByteBuffer();
                 high = byteBuffer.limit() - CQ_STORE_UNIT_SIZE;
                 try {
+                    // 二分查找
                     while (high >= low) {
                         midOffset = (low + high) / (2 * CQ_STORE_UNIT_SIZE) * CQ_STORE_UNIT_SIZE;
                         byteBuffer.position(midOffset);
@@ -488,16 +501,27 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据startIndex获取消息消费队列条目
+     * @param startIndex
+     * @return
+     */
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
+        // MappedFile文件大小
         int mappedFileSize = this.mappedFileSize;
+
+        // startIndex * 20，得到在consumeQueue中的物理偏移量
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
+        // 如果offset大于等于minLogicOffset，则根据偏移量找到具体的物理文件
         if (offset >= this.getMinLogicOffset()) {
             MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset);
             if (mappedFile != null) {
+                // 通过offset与物理文件大小取模，获取在该文件的偏移量，从而从该偏移量开始连续读取20字节即可
                 SelectMappedBufferResult result = mappedFile.selectMappedBuffer((int) (offset % mappedFileSize));
                 return result;
             }
         }
+        // 如果offset小于minLogicOffset，说明该消息已被删除，返回null
         return null;
     }
 

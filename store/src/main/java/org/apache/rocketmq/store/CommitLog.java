@@ -618,12 +618,21 @@ public class CommitLog {
         msg.setEncodedBuff(putMessageThreadLocal.getEncoder().encoderBuffer);
         PutMessageContext putMessageContext = new PutMessageContext(generateKey(putMessageThreadLocal.getKeyBuilder(), msg));
 
+        /**
+         * 下面是获取可写入的CommitLog文件
+         *
+         * CommitLog文件存储目录为${ROCKET_HOME}/store/commitlog目录下，
+         * 每个文件默认1G，一个文件写满后再创建另外一个，以该文件中第一
+         * 个偏移量作为文件名，偏移量小于20位用0补齐
+         */
         long elapsedTimeInLock = 0;
         MappedFile unlockMappedFile = null;
 
+        // 先申请锁，消息存储到CommitLog文件中是串行的
         putMessageLock.lock(); //spin or ReentrantLock ,depending on store config
         try {
             MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile();
+            // 设置消息存储时间
             long beginLockTimestamp = this.defaultMessageStore.getSystemClock().now();
             this.beginTimeInLock = beginLockTimestamp;
 
@@ -631,6 +640,7 @@ public class CommitLog {
             // global
             msg.setStoreTimestamp(beginLockTimestamp);
 
+            // mappedFile为空，说明commitlog目录下没有文件，第一次消息发送，需要用偏移量0创建第一个文件
             if (null == mappedFile || mappedFile.isFull()) {
                 mappedFile = this.mappedFileQueue.getLastMappedFile(0); // Mark: NewFile may be cause noise
             }
@@ -889,11 +899,16 @@ public class CommitLog {
     }
 
     public long getMinOffset() {
+        // 回去目录下的第一个文件
         MappedFile mappedFile = this.mappedFileQueue.getFirstMappedFile();
+        // 文件存在
         if (mappedFile != null) {
+            // 文件可用
             if (mappedFile.isAvailable()) {
+                // 返回文件的起始偏移量
                 return mappedFile.getFileFromOffset();
             } else {
+                // 返回下一个文件的起始偏移量
                 return this.rollNextFile(mappedFile.getFileFromOffset());
             }
         }
@@ -901,18 +916,35 @@ public class CommitLog {
         return -1;
     }
 
+    /**
+     * 根据偏移量和消息长度查找消息
+     * @param offset
+     * @param size
+     * @return
+     */
     public SelectMappedBufferResult getMessage(final long offset, final int size) {
+        // 获取一个文件的大小
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog();
+        // 根据偏移量找到所在的物理偏移量
         MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset, offset == 0);
         if (mappedFile != null) {
+            // 使用offset和文件长度取余，得到在文件内的偏移量
             int pos = (int) (offset % mappedFileSize);
+            // 从指定位置读取指定长度的内容返回
             return mappedFile.selectMappedBuffer(pos, size);
         }
         return null;
     }
 
+    /**
+     * 根据offset，返回下一个文件的起始偏移量
+     * @param offset
+     * @return
+     */
     public long rollNextFile(final long offset) {
+        // 获取文件的大小
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog();
+        // 下一个文件的起始偏移量
         return offset + mappedFileSize - offset % mappedFileSize;
     }
 
@@ -1304,6 +1336,9 @@ public class CommitLog {
             final int msgLen = preEncodeBuffer.getInt(0);
 
             // Determines whether there is sufficient free space
+            // 消息长度加上END_FILE_MIN_BLANK_LENGTH大于CommitLog文件的空闲空间，
+            // 返回END_OF_FILE，Broker会重新创建一个新的CommitLog文件来存储该消息
+            // 每个CommitLog文件至少空闲8字节，高4字节存储当前文件剩余空间，低4字节存储魔数：BLANK_MAGIC_CODE
             if ((msgLen + END_FILE_MIN_BLANK_LENGTH) > maxBlank) {
                 this.msgStoreItemMemory.clear();
                 // 1 TOTALSIZE
@@ -1335,8 +1370,10 @@ public class CommitLog {
 
             final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
             // Write messages to the queue buffer
+            // 将消息内容存储到ByteBuffer中，此时没有刷盘
             byteBuffer.put(preEncodeBuffer);
             msgInner.setEncodedBuff(null);
+            // 创建结果
             AppendMessageResult result = new AppendMessageResult(AppendMessageStatus.PUT_OK, wroteOffset, msgLen, msgIdSupplier,
                 msgInner.getStoreTimestamp(), queueOffset, CommitLog.this.defaultMessageStore.now() - beginTimeMills);
 

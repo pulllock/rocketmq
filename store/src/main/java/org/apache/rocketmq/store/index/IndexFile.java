@@ -27,6 +27,16 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.MappedFile;
 
+/**
+ * Hash槽，一个IndexFile中包含500万个Hash槽，每个Hash槽存储的是落在该Hash槽的hashcode最新的Index的索引
+ *
+ * Index条目列表，默认一个索引文件包含2000万个条目，每个Index条目结构如下：
+ *      - hashcode，key的hashcode
+ *      - phyoffset，消息对应的物理偏移量
+ *      - timediff，该消息存储时间与第一条消息的时间戳的差值，小于0表示该消息无效
+ *      - preIndexNo，该条目的前一条记录的Index索引，当出现hash冲突时，构建的链表结构
+ *
+ */
 public class IndexFile {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static int hashSlotSize = 4;
