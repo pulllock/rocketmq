@@ -310,6 +310,11 @@ public class DefaultMessageStore implements MessageStore {
             }
             log.info("[SetReputOffset] maxPhysicalPosInLogicQueue={} clMinOffset={} clMaxOffset={} clConfirmedOffset={}",
                 maxPhysicalPosInLogicQueue, this.commitLog.getMinOffset(), this.commitLog.getMaxOffset(), this.commitLog.getConfirmOffset());
+            /**
+             * reputFromOffset汉仪是ReputMessageService从哪个物理偏移量开始转发消息给ConsumeQueue和IndexFile
+             * 如果允许重复转发，reputFromOffset设置为CommitLog的提交指针
+             * 如果不允许重复转发，reputFromOffset设置为CommitLog的内存中最大偏移量
+             */
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
             this.reputMessageService.start();
 
@@ -2014,6 +2019,7 @@ public class DefaultMessageStore implements MessageStore {
 
             while (!this.isStopped()) {
                 try {
+                    // 每执行一次任务推送休息1ms
                     Thread.sleep(1);
                     this.doReput();
                 } catch (Exception e) {
