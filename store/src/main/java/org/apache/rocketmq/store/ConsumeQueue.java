@@ -443,14 +443,18 @@ public class ConsumeQueue {
             return true;
         }
 
+        // 依次将消息偏移量、消息长度、tag hashCode写入到ByteBuffer中
         this.byteBufferIndex.flip();
         this.byteBufferIndex.limit(CQ_STORE_UNIT_SIZE);
         this.byteBufferIndex.putLong(offset);
         this.byteBufferIndex.putInt(size);
         this.byteBufferIndex.putLong(tagsCode);
 
+
+        // 计算ConsumeQueue中的物理地址
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
 
+        // 根据计算出来的物理地址获取内存映射文件
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
 
@@ -484,6 +488,7 @@ public class ConsumeQueue {
                 }
             }
             this.maxPhysicOffset = offset + size;
+            // 将内容追加到ConsumeQueue的内存映射文件中，不刷盘，ConsumeQueue刷盘方式为异步刷盘模式。
             return mappedFile.appendMessage(this.byteBufferIndex.array());
         }
         return false;
