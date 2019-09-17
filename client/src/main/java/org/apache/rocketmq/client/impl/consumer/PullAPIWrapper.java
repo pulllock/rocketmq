@@ -198,6 +198,10 @@ public class PullAPIWrapper {
             requestHeader.setSubVersion(subVersion);
             requestHeader.setExpressionType(expressionType);
 
+            /**
+             * 如果消息过滤模式为类过滤，需要根据主题名称，broker地址找到注册在Broker上的FilterServer地址
+             * 从FilterServer上拉取消息，否则从Broker上拉取消息
+             */
             String brokerAddr = findBrokerResult.getBrokerAddr();
             if (PullSysFlag.hasClassFilterFlag(sysFlagInner)) {
                 brokerAddr = computePullFromWhichFilterServer(mq.getTopic(), brokerAddr);
