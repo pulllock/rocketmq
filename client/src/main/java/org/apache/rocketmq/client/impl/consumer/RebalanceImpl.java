@@ -256,7 +256,9 @@ public abstract class RebalanceImpl {
                 break;
             }
             case CLUSTERING: {
+                // 从主题订阅信息缓存表中获取主题的队列信息
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
+                // 发送请求，从Broker中获取该消费组内当前所有的消费者客户端id
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
                 if (null == mqSet) {
                     if (!topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
@@ -272,8 +274,22 @@ public abstract class RebalanceImpl {
                     List<MessageQueue> mqAll = new ArrayList<MessageQueue>();
                     mqAll.addAll(mqSet);
 
+                    // 排序，可以使同一个消费组内看到的视图保持一致
                     Collections.sort(mqAll);
                     Collections.sort(cidAll);
+
+                    /**
+                     * 消息队列分配算法
+                     * 默认提供5种分配算法：
+                     * 1. 平均分配
+                     * 2. 平均轮询分配
+                     * 3. 一致性哈希
+                     * 4. 根据配置
+                     * 5. 根据Broker部署甲方名，对每个消费者负责不同的Broker上的队列
+                     *
+                     * 一个消费者可以分配多个消息队列，但是同一个消息队列只会分配给一个消费者，
+                     * 故如果消费者个数大于消息队列数量，则有些消费者无法消费消息。
+                     */
 
                     AllocateMessageQueueStrategy strategy = this.allocateMessageQueueStrategy;
 

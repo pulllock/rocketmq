@@ -164,6 +164,7 @@ public class RebalancePushImpl extends RebalanceImpl {
                     result = lastOffset;
                 }
                 // First start,no offset
+                // -1表示该消息队列刚创建
                 else if (-1 == lastOffset) {
                     if (mq.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                         result = 0L;
@@ -175,7 +176,9 @@ public class RebalancePushImpl extends RebalanceImpl {
                             throw e;
                         }
                     }
-                } else {
+                }
+                // 小于-1，表示该消息进度文件中存储了错误的偏移量
+                else {
                     result = -1;
                 }
                 break;
