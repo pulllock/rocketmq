@@ -51,14 +51,44 @@ import org.apache.rocketmq.remoting.common.RemotingHelper;
 
 public class ConsumeMessageConcurrentlyService implements ConsumeMessageService {
     private static final InternalLogger log = ClientLogger.getLog();
+    /**
+     * 消息推模式实现类
+     */
     private final DefaultMQPushConsumerImpl defaultMQPushConsumerImpl;
+
+    /**
+     * 消费者对象
+     */
     private final DefaultMQPushConsumer defaultMQPushConsumer;
+
+    /**
+     * 并发消息业务事件类
+     */
     private final MessageListenerConcurrently messageListener;
+
+    /**
+     * 消息消费任务队列
+     */
     private final BlockingQueue<Runnable> consumeRequestQueue;
+
+    /**
+     * 消息消费线程池
+     */
     private final ThreadPoolExecutor consumeExecutor;
+
+    /**
+     * 消费组
+     */
     private final String consumerGroup;
 
+    /**
+     * 添加消费任务到consumeExecutor延迟调度器
+     */
     private final ScheduledExecutorService scheduledExecutorService;
+
+    /**
+     * 定期删除过期消息线程池
+     */
     private final ScheduledExecutorService cleanExpireMsgExecutors;
 
     public ConsumeMessageConcurrentlyService(DefaultMQPushConsumerImpl defaultMQPushConsumerImpl,
@@ -285,6 +315,21 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 break;
         }
 
+        /**
+         * 从ProcessQueue中移除这批消息
+         *
+         * 这里返回的偏移量是移除该批消息后最小的偏移量，
+         * 然后用该偏移量更新消息消费进度，
+         * 以便在消费者重启后能从上一次的消费进度开始消费，
+         * 避免消息重复消费。值得重点注意的是当消息监听器返回RECONSUME_LATER，
+         * 消息消费进度也会向前推进，用ProcessQueue中最小的队列偏移量调用消息
+         * 消费进度存储器OffsetStore更新消费进度，
+         * 这是因为当返回RECONSUME_LATER,
+         * RocketMQ会创建一条与原先消息属性相同的消息，
+         * 拥有一个唯一的新msgld，并存储原消息ID，该消息会存入到commitlog文件中，
+         * 与原先的消息没有任何关联，那该消息当然也会进入到ConsuemeQueue队列中，
+         * 将拥有一个全新的队列偏移量。
+         */
         long offset = consumeRequest.getProcessQueue().removeMessage(consumeRequest.getMsgs());
         if (offset >= 0 && !consumeRequest.getProcessQueue().isDropped()) {
             this.defaultMQPushConsumerImpl.getOffsetStore().updateOffset(consumeRequest.getMessageQueue(), offset, true);
@@ -358,6 +403,11 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
         @Override
         public void run() {
+            /**
+             * 先检查一下
+             * 进行消息重新负载时，如果该消息队列被分配给消费组内其他消费者后，需要dropped设置为true，
+             * 阻止消费者继续消费不属于自己的消息队列
+             */
             if (this.processQueue.isDropped()) {
                 log.info("the message queue not be able to consume, because it's dropped. group={} {}", ConsumeMessageConcurrentlyService.this.consumerGroup, this.messageQueue);
                 return;
@@ -389,6 +439,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                         MessageAccessor.setConsumeStartTimeStamp(msg, String.valueOf(System.currentTimeMillis()));
                     }
                 }
+                // 执行具体的消息消费
                 status = listener.consumeMessage(Collections.unmodifiableList(msgs), context);
             } catch (Throwable e) {
                 log.warn(String.format("consumeMessage exception: %s Group: %s Msgs: %s MQ: %s",
