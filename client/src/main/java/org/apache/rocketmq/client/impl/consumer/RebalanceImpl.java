@@ -383,6 +383,9 @@ public abstract class RebalanceImpl {
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
         for (MessageQueue mq : mqSet) {
             if (!this.processQueueTable.containsKey(mq)) {
+                // 如果经过消息队列重新负载后，分配到新的消息队列时，
+                // 首先需要尝试向Broker发起锁定该消息队列的请求，
+                // 如果返回加锁成功则创建该消息队列的拉取任务
                 if (isOrder && !this.lock(mq)) {
                     log.warn("doRebalance, {}, add a new mq failed, {}, because lock failed", consumerGroup, mq);
                     continue;

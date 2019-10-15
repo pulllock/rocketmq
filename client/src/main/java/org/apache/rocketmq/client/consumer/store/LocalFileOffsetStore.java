@@ -37,15 +37,36 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
  * Local storage implementation
+ * 广播模式消息消费进度存储在消费者本地
  */
 public class LocalFileOffsetStore implements OffsetStore {
+
+    /**
+     * 消息进度存储目录
+     */
     public final static String LOCAL_OFFSET_STORE_DIR = System.getProperty(
         "rocketmq.client.localOffsetStoreDir",
         System.getProperty("user.home") + File.separator + ".rocketmq_offsets");
     private final static InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 消息客户端
+     */
     private final MQClientInstance mQClientFactory;
+
+    /**
+     * 消息消费组
+     */
     private final String groupName;
+
+    /**
+     * 消息进度存储文件
+     */
     private final String storePath;
+
+    /**
+     * 消息消费进度，内存中
+     */
     private ConcurrentMap<MessageQueue, AtomicLong> offsetTable =
         new ConcurrentHashMap<MessageQueue, AtomicLong>();
 
@@ -60,6 +81,7 @@ public class LocalFileOffsetStore implements OffsetStore {
 
     @Override
     public void load() throws MQClientException {
+        // 首先从storePath中加载
         OffsetSerializeWrapper offsetSerializeWrapper = this.readLocalOffset();
         if (offsetSerializeWrapper != null && offsetSerializeWrapper.getOffsetTable() != null) {
             offsetTable.putAll(offsetSerializeWrapper.getOffsetTable());
@@ -128,6 +150,10 @@ public class LocalFileOffsetStore implements OffsetStore {
         return -1;
     }
 
+    /**
+     * MQClientInstance中会启动一个定时任务，默认每5s持久化一次
+     * @param mqs
+     */
     @Override
     public void persistAll(Set<MessageQueue> mqs) {
         if (null == mqs || mqs.isEmpty())
@@ -183,11 +209,13 @@ public class LocalFileOffsetStore implements OffsetStore {
     private OffsetSerializeWrapper readLocalOffset() throws MQClientException {
         String content = null;
         try {
+            // 先尝试从storePath中加载
             content = MixAll.file2String(this.storePath);
         } catch (IOException e) {
             log.warn("Load local offset store file exception", e);
         }
         if (null == content || content.length() == 0) {
+            // storePath中内容为空，尝试从storePath.bak中加载
             return this.readLocalOffsetBak();
         } else {
             OffsetSerializeWrapper offsetSerializeWrapper = null;
@@ -206,6 +234,7 @@ public class LocalFileOffsetStore implements OffsetStore {
     private OffsetSerializeWrapper readLocalOffsetBak() throws MQClientException {
         String content = null;
         try {
+            // 尝试从storePath.bak中加载
             content = MixAll.file2String(this.storePath + ".bak");
         } catch (IOException e) {
             log.warn("Load local offset store bak file exception", e);
