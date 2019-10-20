@@ -620,25 +620,34 @@ public class MQClientInstance {
                             }
                         }
                     } else {
+                        // 从NameServer获取新的topic路由信息
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {
+
+                        // 旧的topic路由信息
                         TopicRouteData old = this.topicRouteTable.get(topic);
+
+                        // 对比新获取的和旧的路由信息是否有变化
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
+                            // 如果新获取的和旧的路由信息没有变化，就看下是否需要更新topic的路由信息
                             changed = this.isNeedUpdateTopicRouteInfo(topic);
                         } else {
                             log.info("the topic[{}] route info changed, old[{}] ,new[{}]", topic, old, topicRouteData);
                         }
 
+                        // 如果新旧路由信息有变化或者需要更新topic路由信息
                         if (changed) {
                             TopicRouteData cloneTopicRouteData = topicRouteData.cloneTopicRouteData();
 
+                            // 更新brokerAddrTable缓存
                             for (BrokerData bd : topicRouteData.getBrokerDatas()) {
                                 this.brokerAddrTable.put(bd.getBrokerName(), bd.getBrokerAddrs());
                             }
 
                             // Update Pub info
+                            // 更新producer的TopicPublishInfo
                             {
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
                                 publishInfo.setHaveTopicRouterInfo(true);
@@ -653,6 +662,7 @@ public class MQClientInstance {
                             }
 
                             // Update sub info
+                            // 更新consumer的MessageQueue
                             {
                                 Set<MessageQueue> subscribeInfo = topicRouteData2TopicSubscribeInfo(topic, topicRouteData);
                                 Iterator<Entry<String, MQConsumerInner>> it = this.consumerTable.entrySet().iterator();
@@ -665,6 +675,7 @@ public class MQClientInstance {
                                 }
                             }
                             log.info("topicRouteTable.put. Topic = {}, TopicRouteData[{}]", topic, cloneTopicRouteData);
+                            // 更新topic路由信息
                             this.topicRouteTable.put(topic, cloneTopicRouteData);
                             return true;
                         }
