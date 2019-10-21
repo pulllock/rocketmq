@@ -198,10 +198,20 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         ServerBootstrap childHandler =
             this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                 .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
+                /**
+                 * 服务端处理客户端连接请求是顺序处理的，
+                 * 同一时间只能处理一个客户端连接，
+                 * 其余连接会放到队列中，
+                 * backlog指定了队列的大小
+                 */
                 .option(ChannelOption.SO_BACKLOG, 1024)
+                // 允许重复使用本地地址和端口
                 .option(ChannelOption.SO_REUSEADDR, true)
+                // 如果在两小时内没有数据的通信时，TCP会自动发送一个活动探测的数据报文
                 .option(ChannelOption.SO_KEEPALIVE, false)
+                // 禁用Nagle算法，适用于小数据即时传输
                 .childOption(ChannelOption.TCP_NODELAY, true)
+                // 接收缓冲区和发送缓冲区大小设置
                 .childOption(ChannelOption.SO_SNDBUF, nettyServerConfig.getServerSocketSndBufSize())
                 .childOption(ChannelOption.SO_RCVBUF, nettyServerConfig.getServerSocketRcvBufSize())
                 .localAddress(new InetSocketAddress(this.nettyServerConfig.getListenPort()))
@@ -211,10 +221,15 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                         ch.pipeline()
                             .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME, handshakeHandler)
                             .addLast(defaultEventExecutorGroup,
+                                // 编码器
                                 encoder,
+                                // 解码器
                                 new NettyDecoder(),
+                                // 心跳管理
                                 new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
+                                // 连接管理器，负责捕获新连接、断开连接、异常等事件，统一调度到NettyEventExecutor处理器处理
                                 connectionManageHandler,
+                                // 最后进行具体处理，根据消息类型进行分发
                                 serverHandler
                             );
                     }
@@ -236,6 +251,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             this.nettyEventExecutor.start();
         }
 
+        // 定时扫描responseTable，获取返回结果，并且处理超时
         this.timer.scheduleAtFixedRate(new TimerTask() {
 
             @Override

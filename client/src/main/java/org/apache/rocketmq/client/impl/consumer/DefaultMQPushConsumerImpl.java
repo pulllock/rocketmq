@@ -599,6 +599,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                     this.defaultMQPushConsumer.getMessageModel(), this.defaultMQPushConsumer.isUnitMode());
                 this.serviceState = ServiceState.START_FAILED;
 
+                // 检查配置信息
                 this.checkConfig();
 
                 // 构建主题订阅信息SubscriptionData并加入到RebalanceImpl的订阅消息中
@@ -912,7 +913,9 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
     public void subscribe(String topic, String subExpression) throws MQClientException {
         try {
+            // 构建SubscriptionData
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(topic, subExpression);
+            // 将订阅关系缓存到rebalanceImpl的subscriptionInner中
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);
             if (this.mQClientFactory != null) {
                 this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
