@@ -366,15 +366,22 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     public RemotingCommand invokeSync(String addr, final RemotingCommand request, long timeoutMillis)
         throws InterruptedException, RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException {
         long beginStartTime = System.currentTimeMillis();
+        /**
+         * 1.  getTopicRouteInfoFromNameServer 的时候addr传的是null
+         */
         final Channel channel = this.getAndCreateChannel(addr);
         if (channel != null && channel.isActive()) {
             try {
+                // 请求的前置钩子
                 doBeforeRpcHooks(addr, request);
                 long costTime = System.currentTimeMillis() - beginStartTime;
                 if (timeoutMillis < costTime) {
                     throw new RemotingTimeoutException("invokeSync call timeout");
                 }
+                // 同步调用
                 RemotingCommand response = this.invokeSyncImpl(channel, request, timeoutMillis - costTime);
+
+                // 请求的后置钩子
                 doAfterRpcHooks(RemotingHelper.parseChannelRemoteAddr(channel), request, response);
                 return response;
             } catch (RemotingSendRequestException e) {
@@ -396,6 +403,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     }
 
     private Channel getAndCreateChannel(final String addr) throws RemotingConnectException, InterruptedException {
+        /**
+         * 1. getTopicRouteInfoFromNameServer 的时候addr传的是null
+         */
         if (null == addr) {
             return getAndCreateNameserverChannel();
         }
@@ -409,6 +419,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     }
 
     private Channel getAndCreateNameserverChannel() throws RemotingConnectException, InterruptedException {
+        // 一个实例只和一台NameServer服务器进行通信，namesrvAddrChoosed会缓存当前进行通信的NameServer
         String addr = this.namesrvAddrChoosed.get();
         if (addr != null) {
             ChannelWrapper cw = this.channelTables.get(addr);
@@ -417,6 +428,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             }
         }
 
+        // NameServer地址列表
         final List<String> addrList = this.namesrvAddrList.get();
         if (this.namesrvChannelLock.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
             try {
@@ -437,6 +449,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
                         this.namesrvAddrChoosed.set(newAddr);
                         log.info("new name server is chosen. OLD: {} , NEW: {}. namesrvIndex = {}", addr, newAddr, namesrvIndex);
+                        // 根据新的NameServer地址建立连接
                         Channel channelNew = this.createChannel(newAddr);
                         if (channelNew != null) {
                             return channelNew;
