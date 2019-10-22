@@ -548,10 +548,25 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
     }
 
+
+    /**
+     * 选择一个消息队列，第一次调用的时候lastBrokerName是null
+     * @param tpInfo
+     * @param lastBrokerName
+     * @return
+     */
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
         return this.mqFaultStrategy.selectOneMessageQueue(tpInfo, lastBrokerName);
     }
 
+    /**
+     * 发送消息成功或者失败的时候都会调用该方法
+     *
+     * @param brokerName broker名称
+     * @param currentLatency 本次消息发送延迟时间
+     * @param isolation 是否隔离，如果为true，使用默认30s来计算Broker故障延迟时长
+     *                  如果为false，则使用本次消息发送延迟时间来计算Broker故障规避时长
+     */
     public void updateFaultItem(final String brokerName, final long currentLatency, boolean isolation) {
         this.mqFaultStrategy.updateFaultItem(brokerName, currentLatency, isolation);
     }
@@ -623,6 +638,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         // updateFaultItem方法，在正常发送和异常后都会被调用
                         // 如果是成功发送，第三个参数isolation=false；如果异常了，第三个参数isolation=true。
                         // endTimestamp - beginTimestampPrev 等于消息发送需要用到的时间
+                        // 发送时间超过550ms后会有不可用时长，至少30S
                         this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
                         switch (communicationMode) {
                             case ASYNC:

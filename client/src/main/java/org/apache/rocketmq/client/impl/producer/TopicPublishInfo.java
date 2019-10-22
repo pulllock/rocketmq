@@ -82,7 +82,22 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
-    // 如果没有启用broker故障延迟机制，选择调用的队列
+    /**
+     * 如果没有启用broker故障延迟机制，选择调用的队列
+     * 在一次消息发送过程中，可能会多次执行选择消息队列的方法，
+     * lastBrokerName就是上次选择的执行发送消息失败的Broker。
+     * 第一次执行消息队列选择时，lastBrokerName为null，此时直接使用sendWhichQueue自增再获取，
+     * 与当前路由表中消息队列个数取模，返回该位置的MessageQueue，如果消息发送失败的话，下次进行消息队列选择时
+     * 规避上次MessageQueue所在的Broker，否则还是有可能再次失败。
+     *
+     * 该算法在一次消息发送过程中能成功规避故障的Broker，但是如果Broker宕机，由于路由算法中的消息队列是按Broker排序的，
+     * 如果上一次根据路由算法选择的是宕机的Broker的第一个队列，那么随后的下次选择的是宕机的Broker的第二个队列，
+     * 消息发送很有可能会失败，再次引发重试。
+     *
+     * 可以在一次消息发送失败后，将不可用的Broker排除在消息队列选择范围外。Broker故障延迟机制可以做到。
+     * @param lastBrokerName
+     * @return
+     */
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
         // lastBrokerName是上一次执行消息发送时选择失败的broker
         // 在重试机制下，第一次执行消息发送时，lastBrokerName = null
