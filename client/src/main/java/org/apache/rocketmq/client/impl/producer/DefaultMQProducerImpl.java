@@ -772,8 +772,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         final TopicPublishInfo topicPublishInfo,
         final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
-        // 获取broker地址
+        // 获取broker地址，从brokerAddrTable缓存中获取主broker
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+        // 如果缓存中没有broker的话，尝试根据topic重新获取路由信息，然后再次获取broker地址
         if (null == brokerAddr) {
             tryToFindTopicPublishInfo(mq.getTopic());
             brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
@@ -783,6 +784,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         if (brokerAddr != null) {
             brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
 
+            // 原消息内容，下面的操作可能会改变消息内容，比如消息压缩
             byte[] prevBody = msg.getBody();
             try {
                 //for MessageBatch,ID has been set in the generating process
@@ -800,7 +802,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 // 消息体超过4K，会对消息体采用zip压缩，并设置标记
                 int sysFlag = 0;
                 boolean msgBodyCompressed = false;
+                // 尝试压缩
                 if (this.tryToCompressMessage(msg)) {
+                    // 设置压缩标记
                     sysFlag |= MessageSysFlag.COMPRESSED_FLAG;
                     msgBodyCompressed = true;
                 }
@@ -971,12 +975,14 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     }
 
     private boolean tryToCompressMessage(final Message msg) {
+        // 批量消息，不压缩
         if (msg instanceof MessageBatch) {
             //batch dose not support compressing right now
             return false;
         }
         byte[] body = msg.getBody();
         if (body != null) {
+            // 消息默认超过4k就进行压缩
             if (body.length >= this.defaultMQProducer.getCompressMsgBodyOverHowmuch()) {
                 try {
                     byte[] data = UtilAll.compress(body, zipCompressLevel);
