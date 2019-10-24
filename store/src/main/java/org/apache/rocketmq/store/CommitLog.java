@@ -48,6 +48,29 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
+ * 消息存储格式：
+ * 1. TOTALSIZE，该消息条目总长度，4字节
+ * 2. MAGICCODE，魔数，4字节，固定值0xdaa320a7
+ * 3. BODYCRC，消息体crc校验码，4字节
+ * 4. QUEUEID，消息消费队列ID，4字节
+ * 5. FLAG，消息FLAG，RocketMQ不做处理，仅供应用程序使用，4字节
+ * 6. QUEUEOFFSET，消息在消息消费队列的偏移量，8字节
+ * 7. PHYSICALOFFSET，消息在CommitLog文件中的偏移量，8字节
+ * 8. SYSFLAG，消息系统Flag，例如是否压缩、是否是事务消息等，4字节
+ * 9. BORNTIMESTAMP，消息生产者调用消息发送API的时间戳，8字节
+ * 10. BORNHOST，消息发送者IP、端口号，8字节
+ * 11. STORETIMESTAMP，消息存储时间戳，8字节
+ * 12. STOREHOSTADDRESS，Broker服务器IP、端口号，8字节
+ * 13. RECONSUMETIMES，消息重试次数，4字节
+ * 14. Prepared Transaction Offset，事务消息物理偏移量，8字节
+ * 15. BodyLength，消息体长度，4字节
+ * 16. Body，消息体内容，长度为bodyLength中存储的值
+ * 17. TopicLength，主题存储长度，1字节，表示主题名称不能超过255个字符
+ * 18. Topic，主题，长度为TopicLength中存储的值
+ * 19. PropertiesLength，消息属性长度，2字节，消息属性长度不能超过65536个字符
+ * 20. Properties，消息属性，长度为PropertiesLength中存储的值
+ *
+ *
  */
 public class CommitLog {
     // Message's MAGIC CODE daa320a7
