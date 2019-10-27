@@ -269,7 +269,7 @@ public class MappedFile extends ReferenceResource {
         int currentPos = this.wrotePosition.get();
 
         if (currentPos < this.fileSize) {
-            // 通过slice方法创建爱你一个与MappedFile共享的内存区
+            // 通过slice方法创建一个与MappedFile共享的内存区
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             byteBuffer.position(currentPos);
             AppendMessageResult result;
