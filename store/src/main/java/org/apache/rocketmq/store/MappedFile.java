@@ -573,6 +573,12 @@ public class MappedFile extends ReferenceResource {
         this.committedPosition.set(pos);
     }
 
+    /**
+     * 每隔OS_PAGE_SIZE向mappedByteBuffer写入一个0，对应页就会产生一个缺页中断，
+     * 操作系统就会为对应页分配物理内存
+     * @param type
+     * @param pages
+     */
     public void warmMappedFile(FlushDiskType type, int pages) {
         long beginTime = System.currentTimeMillis();
         ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
@@ -609,6 +615,7 @@ public class MappedFile extends ReferenceResource {
         log.info("mapped file warm-up done. mappedFile={}, costTime={}", this.getFileName(),
             System.currentTimeMillis() - beginTime);
 
+        // 通过JNA调用mlock方法，锁定mappedByteBuffer对应的物理内存，组织操作系统将相关的内存页调度到交换空间。
         this.mlock();
     }
 
