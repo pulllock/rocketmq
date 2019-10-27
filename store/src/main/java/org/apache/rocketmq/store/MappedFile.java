@@ -42,6 +42,9 @@ import org.apache.rocketmq.store.config.FlushDiskType;
 import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
+/**
+ * 对于commitlog、consumequeue、index三大类文件进行磁盘读写操作，均是通过MappedFile文件完成
+ */
 public class MappedFile extends ReferenceResource {
 
     /**
@@ -51,7 +54,7 @@ public class MappedFile extends ReferenceResource {
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
     /**
-     * 当前JVM实例中MappedFile虚拟内存
+     * 当前JVM实例中MappedFile虚拟内存大小
      */
     private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
 
@@ -61,7 +64,7 @@ public class MappedFile extends ReferenceResource {
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
 
     /**
-     * 当前该文件写指针，从0开始
+     * 当前该文件写指针，从0开始，当wrotePosition == fileSize时代表文件写满了
      */
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
 
@@ -72,12 +75,12 @@ public class MappedFile extends ReferenceResource {
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
 
     /**
-     * 刷盘指针，该指针之前的数据持久化到磁盘中
+     * 刷盘指针，该指针之前的数据都已经持久化到磁盘中
      */
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
 
     /**
-     * 文件大小
+     * 文件大小，默认1G
      */
     protected int fileSize;
 
@@ -103,7 +106,7 @@ public class MappedFile extends ReferenceResource {
     private String fileName;
 
     /**
-     * 该文件初始偏移量
+     * 该文件初始偏移量，也是文件名，代表这个文件开始时的offset
      */
     private long fileFromOffset;
 
@@ -338,6 +341,12 @@ public class MappedFile extends ReferenceResource {
      * @return The current flushed position
      */
     public int flush(final int flushLeastPages) {
+        /**
+         * 是否能够flush，需要满足以下任意条件：
+         * 1. 映射文件已满
+         * 2. flushLeastPages > 0 并且未flush部分超过flushLeastPages
+         * 3. flushLeastPages = 0 并且有新写入部分
+         */
         if (this.isAbleToFlush(flushLeastPages)) {
             if (this.hold()) {
                 int value = getReadPosition();
@@ -369,7 +378,7 @@ public class MappedFile extends ReferenceResource {
      * @return
      */
     public int commit(final int commitLeastPages) {
-        // writeBuffer为空，直接返回wrotePosition指针，表名commit操作主体是writeBuffer
+        // writeBuffer为空，直接返回wrotePosition指针，表明commit操作主体是writeBuffer
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();
@@ -384,6 +393,7 @@ public class MappedFile extends ReferenceResource {
         }
 
         // All dirty data has been committed to FileChannel.
+        // 写到文件末尾时，回收writeBuffer
         if (writeBuffer != null && this.transientStorePool != null && this.fileSize == this.committedPosition.get()) {
             this.transientStorePool.returnBuffer(writeBuffer);
             this.writeBuffer = null;
@@ -418,14 +428,17 @@ public class MappedFile extends ReferenceResource {
         int flush = this.flushedPosition.get();
         int write = getReadPosition();
 
+        // 映射文件已满，可以flush
         if (this.isFull()) {
             return true;
         }
 
+        // flushLeastPages大于0，未flush部分超过flushLeastPages
         if (flushLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= flushLeastPages;
         }
 
+        // flushLeastPages = 0且有新写入部分
         return write > flush;
     }
 
