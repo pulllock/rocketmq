@@ -1541,6 +1541,8 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     public void doDispatch(DispatchRequest req) {
+        // dispatcherList在DefaultMessageStore的构造方法中实例化了ConsumeQueue和Index两个dispatcher
+        // 这里会执行所有的dispathcer的dispatch方法
         for (CommitLogDispatcher dispatcher : this.dispatcherList) {
             dispatcher.dispatch(req);
         }
@@ -1549,6 +1551,8 @@ public class DefaultMessageStore implements MessageStore {
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
         // 根据消息主题与队列id获取对应的ConsumeQueue文件
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
+
+        // 构建consumequeue
         cq.putMessagePositionInfoWrapper(dispatchRequest);
     }
 
@@ -1605,6 +1609,7 @@ public class DefaultMessageStore implements MessageStore {
 
         @Override
         public void dispatch(DispatchRequest request) {
+            // 非事务消息或者事务提交消息，就会去写ConsumeQueue
             final int tranType = MessageSysFlag.getTransactionValue(request.getSysFlag());
             switch (tranType) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE:
@@ -1622,6 +1627,7 @@ public class DefaultMessageStore implements MessageStore {
 
         @Override
         public void dispatch(DispatchRequest request) {
+            // 启用了index构建就进行index的建立
             if (DefaultMessageStore.this.messageStoreConfig.isMessageIndexEnable()) {
                 DefaultMessageStore.this.indexService.buildIndex(request);
             }
@@ -1919,6 +1925,9 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     * 根据commitlog offset将commitlog转发给ConsumeQueue、Index
+     */
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;
@@ -1971,21 +1980,31 @@ public class DefaultMessageStore implements MessageStore {
 
                 /**
                  * 查找从reputFromOffset偏移量开始的全部有效数据，从commitlog中读取的
+                 * 其实是从commitlog对应的MappedFile中获取MappedByteBuffer
                  */
                 SelectMappedBufferResult result = DefaultMessageStore.this.commitLog.getData(reputFromOffset);
                 if (result != null) {
                     try {
+                        // reputFromOffset重置为找到的文件的最开始的offset
                         this.reputFromOffset = result.getStartOffset();
 
+                        /**
+                         * 从reputFromOffset之后会有很多的消息，需要循环挨个处理
+                         */
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
+                            // 生成分发消息的请求，从MappedFile中按照commitlog的格式读取消息信息，包装成DispatchRequest
                             DispatchRequest dispatchRequest =
                                 DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
                             int size = dispatchRequest.getBufferSize() == -1 ? dispatchRequest.getMsgSize() : dispatchRequest.getBufferSize();
 
+                            // 读取成功
                             if (dispatchRequest.isSuccess()) {
+                                // size大于0表示正常的消息
                                 if (size > 0) {
+                                    // 分发消息
                                     DefaultMessageStore.this.doDispatch(dispatchRequest);
 
+                                    // Broker是主机器，并且开启了长轮询，需要通知消费队列有新消息到达
                                     if (BrokerRole.SLAVE != DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole()
                                             && DefaultMessageStore.this.brokerConfig.isLongPollingEnable()
                                             && DefaultMessageStore.this.messageArrivingListener != null) {
@@ -1997,6 +2016,7 @@ public class DefaultMessageStore implements MessageStore {
 
                                     this.reputFromOffset += size;
                                     readSize += size;
+                                    // Broker是从机器，进行统计
                                     if (DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole() == BrokerRole.SLAVE) {
                                         DefaultMessageStore.this.storeStatsService
                                             .getSinglePutMessageTopicTimesTotal(dispatchRequest.getTopic()).incrementAndGet();
@@ -2005,15 +2025,17 @@ public class DefaultMessageStore implements MessageStore {
                                             .addAndGet(dispatchRequest.getMsgSize());
                                     }
                                 } else if (size == 0) {
+                                    // size等于0表示是读到了文件结尾
                                     this.reputFromOffset = DefaultMessageStore.this.commitLog.rollNextFile(this.reputFromOffset);
                                     readSize = result.getSize();
                                 }
                             } else if (!dispatchRequest.isSuccess()) {
-
+                                // 读取失败，size大于0表示读取的总大小和消息的总大小对不上
                                 if (size > 0) {
                                     log.error("[BUG]read total count not equals msg total size. reputFromOffset={}", reputFromOffset);
                                     this.reputFromOffset += size;
                                 } else {
+                                    // size小于0，也就是等于-1，可能是消息错误
                                     doNext = false;
                                     // If user open the dledger pattern or the broker is master node,
                                     // it will not ignore the exception and fix the reputFromOffset variable
@@ -2043,6 +2065,7 @@ public class DefaultMessageStore implements MessageStore {
                 try {
                     // 每执行一次任务推送休息1ms
                     Thread.sleep(1);
+                    // 转发commitlog中的内容到consumequeue和index中
                     this.doReput();
                 } catch (Exception e) {
                     DefaultMessageStore.log.warn(this.getServiceName() + " service has exception. ", e);
