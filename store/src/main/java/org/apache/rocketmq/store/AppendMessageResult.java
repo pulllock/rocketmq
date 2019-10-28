@@ -29,11 +29,14 @@ public class AppendMessageResult {
     // 消息的物理偏移量
     private long wroteOffset;
     // Write Bytes
+    // 写入字节
     private int wroteBytes;
     // Message ID
+    // 消息id
     private String msgId;
     private Supplier<String> msgIdSupplier;
     // Message storage timestamp
+    // 消息写入的时间
     private long storeTimestamp;
     // Consume queue's offset(step by one)
     // 消息消费队列逻辑偏移量，类似于数组下标
