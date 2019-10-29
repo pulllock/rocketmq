@@ -215,6 +215,7 @@ public abstract class RebalanceImpl {
     }
 
     public void doRebalance(final boolean isOrder) {
+        // 针对每个topic进行消息队列分配
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
             for (final Map.Entry<String, SubscriptionData> entry : subTable.entrySet()) {
@@ -229,6 +230,7 @@ public abstract class RebalanceImpl {
             }
         }
 
+        // 移除未订阅的topic对应的消息队列
         this.truncateMessageQueueNotMyTopic();
     }
 
@@ -256,7 +258,7 @@ public abstract class RebalanceImpl {
                 break;
             }
             case CLUSTERING: {
-                // 从主题订阅信息缓存表中获取主题的队列信息
+                // 从主题订阅信息缓存表中获取主题topic对应的队列信息
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 // 发送请求，从Broker中获取该消费组内当前所有的消费者客户端id
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
@@ -281,11 +283,11 @@ public abstract class RebalanceImpl {
                     /**
                      * 消息队列分配算法
                      * 默认提供5种分配算法：
-                     * 1. 平均分配
+                     * 1. 平均分配(默认)
                      * 2. 平均轮询分配
                      * 3. 一致性哈希
                      * 4. 根据配置
-                     * 5. 根据Broker部署甲方名，对每个消费者负责不同的Broker上的队列
+                     * 5. 根据Broker部署机房名，对每个消费者负责不同的Broker上的队列
                      *
                      * 一个消费者可以分配多个消息队列，但是同一个消息队列只会分配给一个消费者，
                      * 故如果消费者个数大于消息队列数量，则有些消费者无法消费消息。
@@ -295,6 +297,7 @@ public abstract class RebalanceImpl {
 
                     List<MessageQueue> allocateResult = null;
                     try {
+                        // 根据分配算法分配消息队列
                         allocateResult = strategy.allocate(
                             this.consumerGroup,
                             this.mQClientFactory.getClientId(),
@@ -311,12 +314,14 @@ public abstract class RebalanceImpl {
                         allocateResultSet.addAll(allocateResult);
                     }
 
+                    // 根据分配的结果，进行ProcessQueueTable的更新
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(
                             "rebalanced result changed. allocateMessageQueueStrategyName={}, group={}, topic={}, clientId={}, mqAllSize={}, cidAllSize={}, rebalanceResultSize={}, rebalanceResultSet={}",
                             strategy.getName(), consumerGroup, topic, this.mQClientFactory.getClientId(), mqSet.size(), cidAll.size(),
                             allocateResultSet.size(), allocateResultSet);
+                        // 如果有变化，更新消息队列
                         this.messageQueueChanged(topic, mqSet, allocateResultSet);
                     }
                 }
@@ -327,6 +332,11 @@ public abstract class RebalanceImpl {
         }
     }
 
+    /**
+     * 移除未定阅的消息队列
+     * 当调用DefaultMQPushConsumer.unsubscribe(topic)时，只移除订阅主题集合(subscriptionInner)，
+     * 对应消息队列移除在该方法
+     */
     private void truncateMessageQueueNotMyTopic() {
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
 
@@ -342,6 +352,13 @@ public abstract class RebalanceImpl {
         }
     }
 
+    /**
+     * 队列均衡时，更新ProcessQueue
+     * @param topic 要重新分配队列的topic
+     * @param mqSet 根据分配算法分配后的消息队列集合
+     * @param isOrder
+     * @return
+     */
     private boolean updateProcessQueueTableInRebalance(final String topic, final Set<MessageQueue> mqSet,
         final boolean isOrder) {
         boolean changed = false;
@@ -353,14 +370,17 @@ public abstract class RebalanceImpl {
             ProcessQueue pq = next.getValue();
 
             if (mq.getTopic().equals(topic)) {
+                // mq不在已经重新分配的队列集合里
                 if (!mqSet.contains(mq)) {
+                    // 将mq对应的ProcessQueue设置为已经丢弃的
                     pq.setDropped(true);
+                    // 如果需要移除，就将该队列从table中移除
                     if (this.removeUnnecessaryMessageQueue(mq, pq)) {
                         it.remove();
                         changed = true;
                         log.info("doRebalance, {}, remove unnecessary mq, {}", consumerGroup, mq);
                     }
-                } else if (pq.isPullExpired()) {
+                } else if (pq.isPullExpired()) { // PullMessageService是否空闲
                     switch (this.consumeType()) {
                         case CONSUME_ACTIVELY:
                             break;
@@ -380,8 +400,11 @@ public abstract class RebalanceImpl {
             }
         }
 
+        // 这里放的是新的队列要进行拉数据的请求
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
+        // 下面是看有没有新增的mq
         for (MessageQueue mq : mqSet) {
+            // processQueueTable不包含mq，说明mq是新增的
             if (!this.processQueueTable.containsKey(mq)) {
                 // 如果经过消息队列重新负载后，分配到新的消息队列时，
                 // 首先需要尝试向Broker发起锁定该消息队列的请求，
@@ -391,11 +414,13 @@ public abstract class RebalanceImpl {
                     continue;
                 }
 
+                // TODO 不理解 将新的mq的offset移除
                 this.removeDirtyOffset(mq);
                 ProcessQueue pq = new ProcessQueue();
 
                 long nextOffset = -1L;
                 try {
+                    // 计算新队列从什么地方开始消费
                     nextOffset = this.computePullFromWhereWithException(mq);
                 } catch (Exception e) {
                     log.info("doRebalance, {}, compute offset failed, {}", consumerGroup, mq);
@@ -403,6 +428,7 @@ public abstract class RebalanceImpl {
                 }
 
                 if (nextOffset >= 0) {
+                    // 新增mq和pq对应关系
                     ProcessQueue pre = this.processQueueTable.putIfAbsent(mq, pq);
                     if (pre != null) {
                         log.info("doRebalance, {}, mq already exists, {}", consumerGroup, mq);
@@ -422,6 +448,7 @@ public abstract class RebalanceImpl {
             }
         }
 
+        // 发起消息拉取请求
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

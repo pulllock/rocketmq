@@ -19,6 +19,8 @@ package org.apache.rocketmq.common.consumer;
 public enum ConsumeFromWhere {
     /**
      * 从队列最新偏移量开始消费
+     * 一个新的订阅组第一次启动，从队列的最后位置开始消费
+     * 后续再启动接着上次消费进度开始消费
      */
     CONSUME_FROM_LAST_OFFSET,
 
@@ -30,11 +32,15 @@ public enum ConsumeFromWhere {
     CONSUME_FROM_MAX_OFFSET,
     /**
      * 从头开始消费
+     * 一个新的订阅组第一次启动，从队列的最前面位置开始消费
+     * 后续再启动接着上次消费的进度开始消费
      */
     CONSUME_FROM_FIRST_OFFSET,
 
     /**
      * 从消费者启动的时间戳对应的消费进度开始消费
+     * 一个新的订阅组第一次启动，从指定的时间点开始消费
+     * 后续再启动接着上次消费的进度开始消费
      */
     CONSUME_FROM_TIMESTAMP,
 }
