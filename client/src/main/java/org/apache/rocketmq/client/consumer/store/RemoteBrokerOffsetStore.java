@@ -38,6 +38,7 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
  * Remote storage implementation
+ * Consumer消费进度管理，负责从Broker获取消费进度，同步消费进度到Broker
  * 集群模式消费进度存储在服务端Broker
  */
 public class RemoteBrokerOffsetStore implements OffsetStore {
