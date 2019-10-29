@@ -57,6 +57,10 @@ import org.apache.rocketmq.store.PutMessageResult;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
+/**
+ * 当Consume消费某条消息失败时，会调用该接口发回消息，Broker会存储发回的消息，
+ * 下次Consumer拉取该消息，能从CommitLog和ConsumeQueue顺序读取
+ */
 public class SendMessageProcessor extends AbstractSendMessageProcessor implements NettyRequestProcessor {
 
     private List<ConsumeMessageHook> consumeMessageHookList;

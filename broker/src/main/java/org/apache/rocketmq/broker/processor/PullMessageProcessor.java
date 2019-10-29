@@ -255,7 +255,9 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         }
 
 
-        // 查找消息
+        /**
+         * 获取消息
+         */
         final GetMessageResult getMessageResult =
             this.brokerController.getMessageStore().getMessage(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
                 requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), messageFilter);
@@ -263,16 +265,25 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         // 获取到消息
         if (getMessageResult != null) {
             response.setRemark(getMessageResult.getStatus().name());
+            // 下一次要拉取消息的起始offset
             responseHeader.setNextBeginOffset(getMessageResult.getNextBeginOffset());
+            // 本次最小的offset
             responseHeader.setMinOffset(getMessageResult.getMinOffset());
+            // 本次最大的offset
             responseHeader.setMaxOffset(getMessageResult.getMaxOffset());
 
+            // 获取消息的时候会有判断是否需要从slave服务器上拉取消息，是为了处理拉取消息过慢的情形
             if (getMessageResult.isSuggestPullingFromSlave()) {
+                // 如果拉取消息慢的时候，需要选另外一台broker进行消息拉取
                 responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getWhichBrokerWhenConsumeSlowly());
             } else {
                 responseHeader.setSuggestWhichBrokerId(MixAll.MASTER_ID);
             }
 
+            /**
+             * 判断下当前broker的角色，如果是从机器，需要看下当前是否有读权限，如果没有读权限，
+             * 需要返回PULL_RETRY_IMMEDIATELY，让消费者立刻重试进行拉取，建议拉取的服务器是主Broker
+             */
             switch (this.brokerController.getMessageStoreConfig().getBrokerRole()) {
                 case ASYNC_MASTER:
                 case SYNC_MASTER:
@@ -285,8 +296,10 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     break;
             }
 
+            // 从broker可读
             if (this.brokerController.getBrokerConfig().isSlaveReadEnable()) {
                 // consume too slow ,redirect to another machine
+                // 如果拉取消息慢，就需要改从其他服务器拉取消息
                 if (getMessageResult.isSuggestPullingFromSlave()) {
                     responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getWhichBrokerWhenConsumeSlowly());
                 }
@@ -393,6 +406,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             switch (response.getCode()) {
                 case ResponseCode.SUCCESS:
 
+                    // 统计
                     this.brokerController.getBrokerStatsManager().incGroupGetNums(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
                         getMessageResult.getMessageCount());
 
@@ -400,6 +414,8 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         getMessageResult.getBufferTotalSize());
 
                     this.brokerController.getBrokerStatsManager().incBrokerGetNums(getMessageResult.getMessageCount());
+
+                    // 使用堆内存读取消息
                     if (this.brokerController.getBrokerConfig().isTransferMsgByHeap()) {
                         final long beginTimeMills = this.brokerController.getMessageStore().now();
                         final byte[] r = this.readGetMessageResult(getMessageResult, requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId());
@@ -408,6 +424,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                             (int) (this.brokerController.getMessageStore().now() - beginTimeMills));
                         response.setBody(r);
                     } else {
+                        // 零拷贝
                         try {
                             FileRegion fileRegion =
                                 new ManyMessageTransfer(response.encodeHeader(getMessageResult.getBufferTotalSize()), getMessageResult);
@@ -428,9 +445,11 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         response = null;
                     }
                     break;
-                case ResponseCode.PULL_NOT_FOUND:
+                case ResponseCode.PULL_NOT_FOUND: // 没查询到消息
 
+                    // Broker允许挂起，并且请求也有允许挂起的标志
                     if (brokerAllowSuspend && hasSuspendFlag) {
+                        // 挂起时间
                         long pollingTimeMills = suspendTimeoutMillisLong;
                         if (!this.brokerController.getBrokerConfig().isLongPollingEnable()) {
                             pollingTimeMills = this.brokerController.getBrokerConfig().getShortPollingTimeMills();
@@ -439,6 +458,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         String topic = requestHeader.getTopic();
                         long offset = requestHeader.getQueueOffset();
                         int queueId = requestHeader.getQueueId();
+                        // 重新组装PullRequest并且添加进PullRequestHoldService中挂起请求
                         PullRequest pullRequest = new PullRequest(request, channel, pollingTimeMills,
                             this.brokerController.getMessageStore().now(), offset, subscriptionData, messageFilter);
                         this.brokerController.getPullRequestHoldService().suspendPullRequest(topic, queueId, pullRequest);
@@ -483,12 +503,13 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             response.setRemark("store getMessage return null");
         }
 
-        // 如果commitlog标记可用并且当前节点为主节点，则更新消息消费进度
+        // 如果commitlog标记可用并且当前节点为主节点，则更新消息消费进度，持久化消息进度
         boolean storeOffsetEnable = brokerAllowSuspend;
         storeOffsetEnable = storeOffsetEnable && hasCommitOffsetFlag;
         storeOffsetEnable = storeOffsetEnable
             && this.brokerController.getMessageStoreConfig().getBrokerRole() != BrokerRole.SLAVE;
         if (storeOffsetEnable) {
+            // 持久化消息进度
             this.brokerController.getConsumerOffsetManager().commitOffset(RemotingHelper.parseChannelRemoteAddr(channel),
                 requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId(), requestHeader.getCommitOffset());
         }
