@@ -45,22 +45,50 @@ import org.apache.rocketmq.store.PutMessageStatus;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * 定时消息有一个单独的主题：SCHEDULE_TOPIC_XXXX，
+ * 该主题下的队列数量等于messageDelayLevel配置的延迟级别数量，
+ * 对应关系为queueId = delayLevel - 1。
+ * 每个延迟级别都会创建一个定时Timer，根据延迟级别对应的延迟时间进行延迟调度
+ */
 public class ScheduleMessageService extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    /**
+     * 第一次调度延时的时间，默认1s
+     */
     private static final long FIRST_DELAY_TIME = 1000L;
+
+    /**
+     * 每一延时级别调度一次后，延迟该时间间隔后在放入调度池
+     */
     private static final long DELAY_FOR_A_WHILE = 100L;
+
+    /**
+     * 发送异常后延迟该时间后，再次继续参与调度
+     */
     private static final long DELAY_FOR_A_PERIOD = 10000L;
 
+    /**
+     * 延迟级别，将1s，5s，10s等字符串解析成delayLevelTable
+     * 解析后的数据类似：{1:1000,2:5000,...}
+     */
     private final ConcurrentMap<Integer /* level */, Long/* delay timeMillis */> delayLevelTable =
         new ConcurrentHashMap<Integer, Long>(32);
 
+    /**
+     * 延迟级别消息消费进度
+     */
     private final ConcurrentMap<Integer /* level */, Long/* offset */> offsetTable =
         new ConcurrentHashMap<Integer, Long>(32);
     private final DefaultMessageStore defaultMessageStore;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private Timer timer;
     private MessageStore writeMessageStore;
+
+    /**
+     * 最大消息延迟级别
+     */
     private int maxDelayLevel;
 
     public ScheduleMessageService(final DefaultMessageStore defaultMessageStore) {
@@ -114,6 +142,7 @@ public class ScheduleMessageService extends ConfigManager {
         if (started.compareAndSet(false, true)) {
             super.load();
             this.timer = new Timer("ScheduleMessageTimerThread", true);
+            // 根据延迟级别创建对应的定时任务，启动定时任务持久化延迟消息队列进度存储
             for (Map.Entry<Integer, Long> entry : this.delayLevelTable.entrySet()) {
                 Integer level = entry.getKey();
                 Long timeDelay = entry.getValue();
@@ -127,6 +156,9 @@ public class ScheduleMessageService extends ConfigManager {
                 }
             }
 
+            /**
+             * 持久化消息消费进度的定时任务，每隔10s执行一次，flushDelayOffsetInterval默认10s
+             */
             this.timer.scheduleAtFixedRate(new TimerTask() {
 
                 @Override
@@ -162,7 +194,9 @@ public class ScheduleMessageService extends ConfigManager {
     }
 
     public boolean load() {
+        // 延迟消息消费队列消息队列进度加载
         boolean result = super.load();
+        // delayLevelTable数据构造
         result = result && this.parseDelayLevel();
         return result;
     }
@@ -222,6 +256,9 @@ public class ScheduleMessageService extends ConfigManager {
         return true;
     }
 
+    /**
+     * SCHEDULE_TOPIC_XXX 每个消费队列对应一个定时任务进行轮训
+     */
     class DeliverDelayedMessageTimerTask extends TimerTask {
         private final int delayLevel;
         private final long offset;
@@ -260,7 +297,12 @@ public class ScheduleMessageService extends ConfigManager {
             return result;
         }
 
+        /**
+         * 根据队列id和topic查找消息消费队列，如果找不到，说明当前不存在该延时级别的消息，忽略本次任务，
+         * 根据延时级别构建下一次调度任务
+         */
         public void executeOnTimeup() {
+            // 查找消费队列
             ConsumeQueue cq =
                 ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
                     delayLevel2QueueId(delayLevel));
@@ -268,6 +310,7 @@ public class ScheduleMessageService extends ConfigManager {
             long failScheduleOffset = offset;
 
             if (cq != null) {
+                // 根据offset从消息消费队列中获取当前队列有效消息
                 SelectMappedBufferResult bufferCQ = cq.getIndexBuffer(this.offset);
                 if (bufferCQ != null) {
                     try {
@@ -299,18 +342,24 @@ public class ScheduleMessageService extends ConfigManager {
                             long countdown = deliverTimestamp - now;
 
                             if (countdown <= 0) {
+                                // 根据消息物理偏移量和消息大小，从commitlog中查找消息
                                 MessageExt msgExt =
                                     ScheduleMessageService.this.defaultMessageStore.lookMessageByOffset(
                                         offsetPy, sizePy);
 
                                 if (msgExt != null) {
                                     try {
+                                        /**
+                                         * 重新构造消息对象，将消息的延迟级别属性清除，
+                                         * 恢复原先消息主题和消费队列，消息消费次数reconsumeTimes不会丢失
+                                         */
                                         MessageExtBrokerInner msgInner = this.messageTimeup(msgExt);
                                         if (TopicValidator.RMQ_SYS_TRANS_HALF_TOPIC.equals(msgInner.getTopic())) {
                                             log.error("[BUG] the real topic of schedule msg is {}, discard the msg. msg={}",
                                                     msgInner.getTopic(), msgInner);
                                             continue;
                                         }
+                                        // 将消息再次存放到commitlog，并将消息转发到主题对应的消息队列上，供消费者再次消费
                                         PutMessageResult putMessageResult =
                                             ScheduleMessageService.this.writeMessageStore
                                                 .putMessage(msgInner);
@@ -353,6 +402,7 @@ public class ScheduleMessageService extends ConfigManager {
                                 ScheduleMessageService.this.timer.schedule(
                                     new DeliverDelayedMessageTimerTask(this.delayLevel, nextOffset),
                                     countdown);
+                                // 更新延迟队列拉取进度
                                 ScheduleMessageService.this.updateOffset(this.delayLevel, nextOffset);
                                 return;
                             }

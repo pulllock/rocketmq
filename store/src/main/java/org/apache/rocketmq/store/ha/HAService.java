@@ -556,6 +556,7 @@ public class HAService {
                 try {
                     if (this.connectMaster()) {
 
+                        // 固定间隔上报进度，默认5s
                         if (this.isTimeToReportOffset()) {
                             boolean result = this.reportSlaveMaxOffset(this.currentReportedOffset);
                             if (!result) {
@@ -565,18 +566,22 @@ public class HAService {
 
                         this.selector.select(1000);
 
+                        // 处理master发来slave的CommitLog内容
                         boolean ok = this.processReadEvent();
                         if (!ok) {
                             this.closeMaster();
                         }
 
+                        // 进度有变化，上报进度到master
                         if (!reportSlaveMaxOffsetPlus()) {
                             continue;
                         }
 
+                        // 从上一次写到现在的间隔时间
                         long interval =
                             HAService.this.getDefaultMessageStore().getSystemClock().now()
                                 - this.lastWriteTimestamp;
+                        // 超过了配置的时间，关闭连接
                         if (interval > HAService.this.getDefaultMessageStore().getMessageStoreConfig()
                             .getHaHousekeepingInterval()) {
                             log.warn("HAClient, housekeeping, found this connection[" + this.masterAddress
