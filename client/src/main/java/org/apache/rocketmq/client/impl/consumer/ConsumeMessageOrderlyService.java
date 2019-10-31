@@ -228,6 +228,13 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
         return result;
     }
 
+    /**
+     * 顺序消费提交消费请求，不会处理传入的消息，而是从队列中获取
+     * @param msgs 消息列表，默认一次从服务器最多拉取32条
+     * @param processQueue 消息处理队列
+     * @param messageQueue 消息所属消费队列
+     * @param dispathToConsume 是否转发到消费线程池，并发消费时忽略该参数
+     */
     @Override
     public void submitConsumeRequest(
         final List<MessageExt> msgs,
