@@ -200,6 +200,18 @@ public class TransactionalMessageBridge {
         return store.asyncPutMessage(parseHalfMessageInner(messageInner));
     }
 
+    /**
+     * 这里是事务消息和非事务消息发送流程的主要区别，
+     * 如果是事务消息，需要备份消息的原topic与原消费队列，
+     * 然后将主题改为RMQ_SYS_TRANS_HALF_TOPIC，消费队列变为0，
+     * 然后消息按照普通消息存储在commitlog文件，进而转发到RMQ_SYS_TRANS_HALF_TOPIC对应的消息消费队列。
+     *
+     * 事务消息在未提交之前并不会存入消息原有主题，也就不会被消费者消费。
+     *
+     * 采用定时任务去消费该主题，然后将消息在满足特定条件下恢复消息主题，进而被消费者消费。
+     * @param msgInner
+     * @return
+     */
     private MessageExtBrokerInner parseHalfMessageInner(MessageExtBrokerInner msgInner) {
         MessageAccessor.putProperty(msgInner, MessageConst.PROPERTY_REAL_TOPIC, msgInner.getTopic());
         MessageAccessor.putProperty(msgInner, MessageConst.PROPERTY_REAL_QUEUE_ID,
