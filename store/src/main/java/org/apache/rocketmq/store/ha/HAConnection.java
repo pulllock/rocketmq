@@ -28,15 +28,31 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
+/**
+ * HA master服务端 HA连接对象的封装
+ */
 public class HAConnection {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final HAService haService;
     private final SocketChannel socketChannel;
     private final String clientAddr;
+    /**
+     * HA master网络写实现类
+     */
     private WriteSocketService writeSocketService;
+    /**
+     * HA master网络读实现类
+     */
     private ReadSocketService readSocketService;
 
+    /**
+     * 从服务器请求拉取数据的偏移量
+     */
     private volatile long slaveRequestOffset = -1;
+
+    /**
+     * 从服务器反馈已拉取完的数据偏移量
+     */
     private volatile long slaveAckOffset = -1;
 
     public HAConnection(final HAService haService, final SocketChannel socketChannel) throws IOException {
@@ -93,6 +109,10 @@ public class HAConnection {
             this.setDaemon(true);
         }
 
+        /**
+         * 每隔1s处理一次请求
+         * 解析slave服务器的拉取请求
+         */
         @Override
         public void run() {
             HAConnection.log.info(this.getServiceName() + " service started");
