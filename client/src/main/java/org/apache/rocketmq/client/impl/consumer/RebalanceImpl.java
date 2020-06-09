@@ -44,8 +44,20 @@ import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
 public abstract class RebalanceImpl {
     protected static final InternalLogger log = ClientLogger.getLog();
     protected final ConcurrentMap<MessageQueue, ProcessQueue> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
+
+    /**
+     * topic订阅消息队列表
+     * key topic
+     * value 对应的消息队列集合
+     */
     protected final ConcurrentMap<String/* topic */, Set<MessageQueue>> topicSubscribeInfoTable =
         new ConcurrentHashMap<String, Set<MessageQueue>>();
+
+    /**
+     * topic订阅数据
+     * key topic
+     * value 订阅数据
+     */
     protected final ConcurrentMap<String /* topic */, SubscriptionData> subscriptionInner =
         new ConcurrentHashMap<String, SubscriptionData>();
     protected String consumerGroup;
@@ -219,11 +231,14 @@ public abstract class RebalanceImpl {
 
     public void doRebalance(final boolean isOrder) {
         // 针对每个topic进行消息队列分配
+        // subscriptionInner中存的是每个Topic对应的订阅数据
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
+            // 遍历每个topic进行rebalance
             for (final Map.Entry<String, SubscriptionData> entry : subTable.entrySet()) {
                 final String topic = entry.getKey();
                 try {
+                    // 根据topic进行rebalance
                     this.rebalanceByTopic(topic, isOrder);
                 } catch (Throwable e) {
                     if (!topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
@@ -241,9 +256,14 @@ public abstract class RebalanceImpl {
         return subscriptionInner;
     }
 
+    /**
+     * 根据topic进行rebalance
+     * @param topic
+     * @param isOrder
+     */
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
-            case BROADCASTING: {
+            case BROADCASTING: { // 广播模式
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 if (mqSet != null) {
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, mqSet, isOrder);
@@ -260,8 +280,8 @@ public abstract class RebalanceImpl {
                 }
                 break;
             }
-            case CLUSTERING: {
-                // 从主题订阅信息缓存表中获取主题topic对应的队列信息
+            case CLUSTERING: { // 集群模式
+                // 从topic订阅信息缓存表中获取topic对应的队列信息
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 // 发送请求，从Broker中获取该消费组内当前所有的消费者客户端id
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
@@ -275,6 +295,7 @@ public abstract class RebalanceImpl {
                     log.warn("doRebalance, {} {}, get consumer id list failed", consumerGroup, topic);
                 }
 
+                // 本消费者中topic订阅的队列信息不能为空 && 从Broker上获取到的该消费组内当前所有消费者客户端id不能为空
                 if (mqSet != null && cidAll != null) {
                     List<MessageQueue> mqAll = new ArrayList<MessageQueue>();
                     mqAll.addAll(mqSet);

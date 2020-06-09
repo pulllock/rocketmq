@@ -1067,11 +1067,12 @@ public class MQClientInstance {
     }
 
     public void doRebalance() {
-        // 遍历当前client包含的已注册的消费者，对消费者执行doRebalance方法
+        // 遍历当前实例包含的已注册的消费者，对消费者执行doRebalance方法
         for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
             MQConsumerInner impl = entry.getValue();
             if (impl != null) {
                 try {
+                    // 每个消费者都执行doRebalance
                     impl.doRebalance();
                 } catch (Throwable e) {
                     log.error("doRebalance exception", e);
@@ -1172,6 +1173,12 @@ public class MQClientInstance {
         return 0;
     }
 
+    /**
+     * 从Broker中获取消费组内所有消费者客户端id
+     * @param topic 指定的topic，用来获取对应的broker
+     * @param group 消费组
+     * @return
+     */
     public List<String> findConsumerIdList(final String topic, final String group) {
         // 根据topic从topicRouteTable中随机找一个Broker
         String brokerAddr = this.findBrokerAddrByTopic(topic);
