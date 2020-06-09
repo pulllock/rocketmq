@@ -36,6 +36,12 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 public class ConsumerManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final long CHANNEL_EXPIRED_TIMEOUT = 1000 * 120;
+
+    /**
+     * 消费组信息
+     * key 消费组名称
+     * value 消费组信息
+     */
     private final ConcurrentMap<String/* Group */, ConsumerGroupInfo> consumerTable =
         new ConcurrentHashMap<String, ConsumerGroupInfo>(1024);
     private final ConsumerIdsChangeListener consumerIdsChangeListener;
@@ -95,30 +101,54 @@ public class ConsumerManager {
         }
     }
 
+    /**
+     * 注册消费者信息
+     * @param group 消费组
+     * @param clientChannelInfo
+     * @param consumeType 消费类型：pull或push
+     * @param messageModel 消费模式：集群或广播
+     * @param consumeFromWhere 从哪里开始消费
+     * @param subList 消费组订阅信息
+     * @param isNotifyConsumerIdsChangedEnable 消费组变化后是否通知消费者
+     * @return
+     */
     public boolean registerConsumer(final String group, final ClientChannelInfo clientChannelInfo,
         ConsumeType consumeType, MessageModel messageModel, ConsumeFromWhere consumeFromWhere,
         final Set<SubscriptionData> subList, boolean isNotifyConsumerIdsChangedEnable) {
 
+        // 从缓存获取消费组信息，包含消费组订阅信息，订阅信息是按照消费组来存放的
+        // 所以同一个消费组中的订阅信息要完全一致！！！
         ConsumerGroupInfo consumerGroupInfo = this.consumerTable.get(group);
+        // 缓存中不存在，新建消费组信息放进缓存
         if (null == consumerGroupInfo) {
             ConsumerGroupInfo tmp = new ConsumerGroupInfo(group, consumeType, messageModel, consumeFromWhere);
             ConsumerGroupInfo prev = this.consumerTable.putIfAbsent(group, tmp);
             consumerGroupInfo = prev != null ? prev : tmp;
         }
 
+        // 更新channel，新的消费者进来才会返回true
         boolean r1 =
             consumerGroupInfo.updateChannel(clientChannelInfo, consumeType, messageModel,
                 consumeFromWhere);
+
+        // 更新订阅信息，订阅信息是按照消费组存放的，同一个消费组中的订阅信息要完全一直，
+        // 否则会导致同一个消费组中各个消费者订阅信息相互覆盖
+        // 新增topic订阅信息和删除topic订阅信息都会返回true
         boolean r2 = consumerGroupInfo.updateSubscription(subList);
 
+        // 有新的消费者进来或者新增了topic订阅信息或者删除了topic订阅信息
         if (r1 || r2) {
+            // 有变化需要通知消费者
             if (isNotifyConsumerIdsChangedEnable) {
+                // invokeOneway通知消费者有变化，消费者可以进行rebalance
                 this.consumerIdsChangeListener.handle(ConsumerGroupEvent.CHANGE, group, consumerGroupInfo.getAllChannel());
             }
         }
 
+        // TODO
         this.consumerIdsChangeListener.handle(ConsumerGroupEvent.REGISTER, group, subList);
 
+        // 有新的消费者进来或者新增了topic订阅信息或者删除了topic订阅信息才返回true
         return r1 || r2;
     }
 

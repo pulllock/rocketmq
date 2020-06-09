@@ -56,6 +56,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
         throws RemotingCommandException {
         switch (request.getCode()) {
             case RequestCode.HEART_BEAT:
+                // 处理心跳请求
                 return this.heartBeat(ctx, request);
             case RequestCode.UNREGISTER_CLIENT:
                 return this.unregisterClient(ctx, request);
@@ -73,7 +74,9 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
     }
 
     public RemotingCommand heartBeat(ChannelHandlerContext ctx, RemotingCommand request) {
+        // 心跳响应命令
         RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 心跳数据
         HeartbeatData heartbeatData = HeartbeatData.decode(request.getBody(), HeartbeatData.class);
         ClientChannelInfo clientChannelInfo = new ClientChannelInfo(
             ctx.channel(),
@@ -82,24 +85,36 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
             request.getVersion()
         );
 
+        // 消费者数据
         for (ConsumerData data : heartbeatData.getConsumerDataSet()) {
+            // 获取消费组订阅配置信息
             SubscriptionGroupConfig subscriptionGroupConfig =
                 this.brokerController.getSubscriptionGroupManager().findSubscriptionGroupConfig(
                     data.getGroupName());
             boolean isNotifyConsumerIdsChangedEnable = true;
+
+            // 已经存在消费组订阅配置信息
             if (null != subscriptionGroupConfig) {
                 isNotifyConsumerIdsChangedEnable = subscriptionGroupConfig.isNotifyConsumerIdsChangedEnable();
                 int topicSysFlag = 0;
                 if (data.isUnitMode()) {
                     topicSysFlag = TopicSysFlag.buildSysFlag(false, true);
                 }
+                /**
+                 * 重试队列是已ConsumerGroup为维度的，
+                 * 重试队列Topic名称格式：%RETRY%consumer_group
+                 */
                 String newTopic = MixAll.getRetryTopic(data.getGroupName());
+
+                // 创建重试队列对应的Topic信息：%RETRY%consumer_group
+                // 如果已经存在就直接返回，如果不存在就新建一个TopicConfig并向所有Nameserver广播请求更新路由信息
                 this.brokerController.getTopicConfigManager().createTopicInSendMessageBackMethod(
                     newTopic,
                     subscriptionGroupConfig.getRetryQueueNums(),
                     PermName.PERM_WRITE | PermName.PERM_READ, topicSysFlag);
             }
 
+            // 注册消费者信息，有新的消费者进来或者新增了topic订阅信息或者删除了topic订阅信息才返回true
             boolean changed = this.brokerController.getConsumerManager().registerConsumer(
                 data.getGroupName(),
                 clientChannelInfo,
@@ -118,7 +133,10 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
             }
         }
 
+        // 生产者数据
         for (ProducerData data : heartbeatData.getProducerDataSet()) {
+            // 注册生产者信息
+            // TODO
             this.brokerController.getProducerManager().registerProducer(data.getGroupName(),
                 clientChannelInfo);
         }

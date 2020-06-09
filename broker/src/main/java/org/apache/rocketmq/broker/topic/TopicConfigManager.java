@@ -225,12 +225,22 @@ public class TopicConfigManager extends ConfigManager {
         return topicConfig;
     }
 
+    /**
+     * 创建Topic，如果已经存在就直接返回，如果不存在就新建一个TopicConfig并向所有Nameserver广播请求更新路由信息
+     * @param topic 要创建的topic
+     * @param clientDefaultTopicQueueNums
+     * @param perm
+     * @param topicSysFlag
+     * @return
+     */
     public TopicConfig createTopicInSendMessageBackMethod(
         final String topic,
         final int clientDefaultTopicQueueNums,
         final int perm,
         final int topicSysFlag) {
+        // 先从topicConfig缓存中查找topic
         TopicConfig topicConfig = this.topicConfigTable.get(topic);
+        // 已经存在topic对应的信息，直接返回
         if (topicConfig != null)
             return topicConfig;
 
@@ -243,6 +253,7 @@ public class TopicConfigManager extends ConfigManager {
                     if (topicConfig != null)
                         return topicConfig;
 
+                    // 新建
                     topicConfig = new TopicConfig(topic);
                     topicConfig.setReadQueueNums(clientDefaultTopicQueueNums);
                     topicConfig.setWriteQueueNums(clientDefaultTopicQueueNums);
@@ -252,7 +263,9 @@ public class TopicConfigManager extends ConfigManager {
                     log.info("create new topic {}", topicConfig);
                     this.topicConfigTable.put(topic, topicConfig);
                     createNew = true;
+                    // 更新版本号
                     this.dataVersion.nextVersion();
+                    // 持久化
                     this.persist();
                 } finally {
                     this.topicConfigTableLock.unlock();
@@ -262,6 +275,7 @@ public class TopicConfigManager extends ConfigManager {
             log.error("createTopicInSendMessageBackMethod exception", e);
         }
 
+        // 如果是新建topic
         if (createNew) {
             this.brokerController.registerBrokerAll(false, true, true);
         }
@@ -303,6 +317,7 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         if (createNew) {
+            // 向Nameserver广播，请求Nameserver更新路由信息
             this.brokerController.registerBrokerAll(false, true, true);
         }
 

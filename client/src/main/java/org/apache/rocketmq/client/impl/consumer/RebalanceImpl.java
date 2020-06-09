@@ -438,9 +438,13 @@ public abstract class RebalanceImpl {
                     } else {
                         log.info("doRebalance, {}, add a new mq, {}", consumerGroup, mq);
                         PullRequest pullRequest = new PullRequest();
+                        // 消费组
                         pullRequest.setConsumerGroup(consumerGroup);
+                        // 消费偏移量
                         pullRequest.setNextOffset(nextOffset);
+                        // 消息队列
                         pullRequest.setMessageQueue(mq);
+                        // 消息缓存快照，拉取消息到本地缓存，等待业务方消费
                         pullRequest.setProcessQueue(pq);
                         pullRequestList.add(pullRequest);
                         changed = true;
@@ -451,7 +455,7 @@ public abstract class RebalanceImpl {
             }
         }
 
-        // 发起消息拉取请求
+        // 发起消息拉取请求，这一步会将拉消息请求放到消息拉取服务的阻塞队列中
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

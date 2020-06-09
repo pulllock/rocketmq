@@ -34,6 +34,11 @@ import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 public class SubscriptionGroupManager extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
 
+    /**
+     * 消费者订阅组配置信息
+     * key 消费组
+     * value订阅组信息
+     */
     private final ConcurrentMap<String, SubscriptionGroupConfig> subscriptionGroupTable =
         new ConcurrentHashMap<String, SubscriptionGroupConfig>(1024);
     private final DataVersion dataVersion = new DataVersion();
@@ -117,9 +122,18 @@ public class SubscriptionGroupManager extends ConfigManager {
         }
     }
 
+    /**
+     * 获取消费者订阅组配置信息
+     * @param group 消费组
+     * @return
+     */
     public SubscriptionGroupConfig findSubscriptionGroupConfig(final String group) {
+        // 缓存中获取消费者订阅组配置信息
         SubscriptionGroupConfig subscriptionGroupConfig = this.subscriptionGroupTable.get(group);
+        // 缓存中不存在
         if (null == subscriptionGroupConfig) {
+
+            // 自动创建消费组或系统用的消费组
             if (brokerController.getBrokerConfig().isAutoCreateSubscriptionGroup() || MixAll.isSysConsumerGroup(group)) {
                 subscriptionGroupConfig = new SubscriptionGroupConfig();
                 subscriptionGroupConfig.setGroupName(group);
@@ -127,7 +141,9 @@ public class SubscriptionGroupManager extends ConfigManager {
                 if (null == preConfig) {
                     log.info("auto create a subscription group, {}", subscriptionGroupConfig.toString());
                 }
+                // 更新数据版本号
                 this.dataVersion.nextVersion();
+                // 持久化，文件：${user.home}/store/config/subscriptionGroup.json文件
                 this.persist();
             }
         }
@@ -140,6 +156,10 @@ public class SubscriptionGroupManager extends ConfigManager {
         return this.encode(false);
     }
 
+    /**
+     * 配置文件：${user.home}/store/config/subscriptionGroup.json
+     * @return
+     */
     @Override
     public String configFilePath() {
         return BrokerPathConfigHelper.getSubscriptionGroupPath(this.brokerController.getMessageStoreConfig()

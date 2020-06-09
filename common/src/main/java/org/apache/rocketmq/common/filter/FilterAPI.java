@@ -38,19 +38,25 @@ public class FilterAPI {
 
     public static SubscriptionData buildSubscriptionData(String topic, String subString) throws Exception {
         SubscriptionData subscriptionData = new SubscriptionData();
+        // topic
         subscriptionData.setTopic(topic);
+        // 订阅表达式，tag
         subscriptionData.setSubString(subString);
 
+        // 如果没有指定tag或者是*，就是订阅Topic下的全部
         if (null == subString || subString.equals(SubscriptionData.SUB_ALL) || subString.length() == 0) {
             subscriptionData.setSubString(SubscriptionData.SUB_ALL);
         } else {
+            // tag可以使用||分隔指定多个
             String[] tags = subString.split("\\|\\|");
             if (tags.length > 0) {
                 for (String tag : tags) {
                     if (tag.length() > 0) {
                         String trimString = tag.trim();
                         if (trimString.length() > 0) {
+                            // tag
                             subscriptionData.getTagsSet().add(trimString);
+                            // tag的哈希code
                             subscriptionData.getCodeSet().add(trimString.hashCode());
                         }
                     }

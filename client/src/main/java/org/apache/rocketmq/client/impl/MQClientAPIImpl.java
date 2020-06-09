@@ -176,6 +176,9 @@ public class MQClientAPIImpl {
 
     private final RemotingClient remotingClient;
     private final TopAddressing topAddressing;
+    /**
+     * 处理服务器发来的请求
+     */
     private final ClientRemotingProcessor clientRemotingProcessor;
     private String nameSrvAddr = null;
     private ClientConfig clientConfig;
@@ -1008,18 +1011,32 @@ public class MQClientAPIImpl {
         this.remotingClient.invokeOneway(MixAll.brokerVIPChannel(this.clientConfig.isVipChannelEnabled(), addr), request, timeoutMillis);
     }
 
+    /**
+     * 发送心跳数据
+     * @param addr Broker地址
+     * @param heartbeatData 心跳数据
+     * @param timeoutMillis 超时时间
+     * @return 版本号
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     public int sendHearbeat(
         final String addr,
         final HeartbeatData heartbeatData,
         final long timeoutMillis
     ) throws RemotingException, MQBrokerException, InterruptedException {
+        // 心跳请求命令
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.HEART_BEAT, null);
         request.setLanguage(clientConfig.getLanguage());
+        // 心跳数据
         request.setBody(heartbeatData.encode());
+        // 同步发送心跳数据
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
         assert response != null;
         switch (response.getCode()) {
             case ResponseCode.SUCCESS: {
+                // 返回版本号
                 return response.getVersion();
             }
             default:

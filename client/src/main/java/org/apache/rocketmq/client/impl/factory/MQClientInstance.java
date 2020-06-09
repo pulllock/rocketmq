@@ -85,6 +85,7 @@ import org.apache.rocketmq.remoting.netty.NettyClientConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 /**
+ * MQ客户端实例，管理客户端资源
  * 封装对Namesrv、Broker的API调用，提供给Producer和Consumer使用
  */
 public class MQClientInstance {
@@ -94,17 +95,61 @@ public class MQClientInstance {
     private final int instanceIndex;
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
+
+    /**
+     * 使用当前实例的Producer对象
+     */
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+
+    /**
+     * 使用当前实例的Consumer对象
+     */
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
+
+    /**
+     * 使用当前实例的AdminExt对象
+     */
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
+
+    /**
+     * Netty客户端配置
+     */
     private final NettyClientConfig nettyClientConfig;
+
+    /**
+     * Client RPC调用封装
+     */
     private final MQClientAPIImpl mQClientAPIImpl;
+
+    /**
+     * Admin RPC调用封装
+     */
     private final MQAdminImpl mQAdminImpl;
+
+    /**
+     * Topic的路由信息，从Nameserver获取的
+     */
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
+
+    /**
+     * 获取Topic路由信息时要加的锁
+     */
     private final Lock lockNamesrv = new ReentrantLock();
+
+    /**
+     * 心跳发送时要加的锁
+     */
     private final Lock lockHeartbeat = new ReentrantLock();
+
+    /**
+     * Broker名字和Broker地址对应关系，主从节点地址列表
+     */
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
         new ConcurrentHashMap<String, HashMap<Long, String>>();
+
+    /**
+     * Broker版本
+     */
     private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
         new ConcurrentHashMap<String, HashMap<String, Integer>>();
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -113,10 +158,31 @@ public class MQClientInstance {
             return new Thread(r, "MQClientFactoryScheduledThread");
         }
     });
+
+    /**
+     * 处理服务器发来的请求
+     */
     private final ClientRemotingProcessor clientRemotingProcessor;
+
+    /**
+     * 拉消息的服务，在push方式中异步线程处理拉消息请求
+     */
     private final PullMessageService pullMessageService;
+
+    /**
+     * rebalance服务
+     */
     private final RebalanceService rebalanceService;
+
+    /**
+     * 内部Producer对象，用于消费失败或超时的消息，
+     * sendMessageBack回发给broker
+     */
     private final DefaultMQProducer defaultMQProducer;
+
+    /**
+     * 消费者状态管理统计服务
+     */
     private final ConsumerStatsManager consumerStatsManager;
     private final AtomicLong sendHeartbeatTimesTotal = new AtomicLong(0);
     private ServiceState serviceState = ServiceState.CREATE_JUST;
@@ -136,6 +202,7 @@ public class MQClientInstance {
         this.mQClientAPIImpl = new MQClientAPIImpl(this.nettyClientConfig, this.clientRemotingProcessor, rpcHook, clientConfig);
 
         if (this.clientConfig.getNamesrvAddr() != null) {
+            // 指定了Nameserver地址，更新nameserver地址列表
             this.mQClientAPIImpl.updateNameServerAddressList(this.clientConfig.getNamesrvAddr());
             log.info("user specified name server address: {}", this.clientConfig.getNamesrvAddr());
         }
@@ -467,10 +534,22 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 发送心跳到所有的Broker，包括订阅关系
+     *
+     * 1. 在DefaultMQPushConsumerImpl#start启动后会发送心跳
+     * 2. 在DefaultMQPushConsumerImpl#subscribe订阅topic和tag的时候会发送心跳
+     * 3. 在RebalancePushImpl#messageQueueChanged消息队列有变化后会发送心跳
+     * 4. 在MQClientInstance#startScheduledTask启动定时任务时会启动一个定时任务发送心跳
+     * 5. 在DefaultMQProducerImpl#start启动后会发送心跳
+     */
     public void sendHeartbeatToAllBrokerWithLock() {
         if (this.lockHeartbeat.tryLock()) {
             try {
+                // 发送心跳给所有的Broker
                 this.sendHeartbeatToAllBroker();
+
+                // TODO
                 this.uploadFilterClassSource();
             } catch (final Exception e) {
                 log.error("sendHeartbeatToAllBroker exception", e);
@@ -530,25 +609,34 @@ public class MQClientInstance {
         return false;
     }
 
+    /**
+     * 发送心跳数据给所有Broker
+     */
     private void sendHeartbeatToAllBroker() {
+        // 准备心跳数据
         final HeartbeatData heartbeatData = this.prepareHeartbeatData();
         final boolean producerEmpty = heartbeatData.getProducerDataSet().isEmpty();
         final boolean consumerEmpty = heartbeatData.getConsumerDataSet().isEmpty();
+        // 消费者和生产者都为空，不需要发送心跳
         if (producerEmpty && consumerEmpty) {
             log.warn("sending heartbeat, but no consumer and no producer. [{}]", this.clientId);
             return;
         }
 
+        // broker地址不能为空
         if (!this.brokerAddrTable.isEmpty()) {
             long times = this.sendHeartbeatTimesTotal.getAndIncrement();
             Iterator<Entry<String, HashMap<Long, String>>> it = this.brokerAddrTable.entrySet().iterator();
+            // 遍历所有broker地址
             while (it.hasNext()) {
                 Entry<String, HashMap<Long, String>> entry = it.next();
                 String brokerName = entry.getKey();
                 HashMap<Long, String> oneTable = entry.getValue();
                 if (oneTable != null) {
                     for (Map.Entry<Long, String> entry1 : oneTable.entrySet()) {
+                        // brokerId
                         Long id = entry1.getKey();
+                        // broker地址
                         String addr = entry1.getValue();
                         if (addr != null) {
                             if (consumerEmpty) {
@@ -557,6 +645,7 @@ public class MQClientInstance {
                             }
 
                             try {
+                                // 向具体的Broker发送心跳数据，返回版本号
                                 int version = this.mQClientAPIImpl.sendHearbeat(addr, heartbeatData, 3000);
                                 if (!this.brokerVersionTable.containsKey(brokerName)) {
                                     this.brokerVersionTable.put(brokerName, new HashMap<String, Integer>(4));
@@ -705,35 +794,47 @@ public class MQClientInstance {
         return false;
     }
 
+    /**
+     * 准备心跳数据，消费者和生产者数据
+     * @return
+     */
     private HeartbeatData prepareHeartbeatData() {
         HeartbeatData heartbeatData = new HeartbeatData();
 
-        // clientID
+        // clientID：IP@InstanceName
         heartbeatData.setClientID(this.clientId);
 
-        // Consumer
+        // Consumer 遍历消费者
         for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
             MQConsumerInner impl = entry.getValue();
             if (impl != null) {
                 ConsumerData consumerData = new ConsumerData();
+                // 消费组名
                 consumerData.setGroupName(impl.groupName());
+                // 消费类型：pull或push
                 consumerData.setConsumeType(impl.consumeType());
+                // 消费模式：集群或广播
                 consumerData.setMessageModel(impl.messageModel());
+                // 从哪里开始消费
                 consumerData.setConsumeFromWhere(impl.consumeFromWhere());
+                // 订阅关系
                 consumerData.getSubscriptionDataSet().addAll(impl.subscriptions());
                 consumerData.setUnitMode(impl.isUnitMode());
 
+                // 将消费者数据添加到心跳数据中
                 heartbeatData.getConsumerDataSet().add(consumerData);
             }
         }
 
-        // Producer
+        // Producer 遍历生产者
         for (Map.Entry<String/* group */, MQProducerInner> entry : this.producerTable.entrySet()) {
             MQProducerInner impl = entry.getValue();
             if (impl != null) {
                 ProducerData producerData = new ProducerData();
+                // 生产者组名
                 producerData.setGroupName(entry.getKey());
 
+                // 添加生产者数据到心跳数据中
                 heartbeatData.getProducerDataSet().add(producerData);
             }
         }
