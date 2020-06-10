@@ -43,10 +43,16 @@ import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
 
 public abstract class RebalanceImpl {
     protected static final InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 消息处理队列表，分配好的队列，消息存储也在这里
+     * key 消息队列
+     * value 消费进度镜像
+     */
     protected final ConcurrentMap<MessageQueue, ProcessQueue> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
 
     /**
-     * topic订阅消息队列表
+     * topic下所有的队列，可以订阅的所有队列，定时从Nameserver更新最新版本
      * key topic
      * value 对应的消息队列集合
      */
@@ -54,9 +60,9 @@ public abstract class RebalanceImpl {
         new ConcurrentHashMap<String, Set<MessageQueue>>();
 
     /**
-     * topic订阅数据
+     * topic订阅关系数据，用户配置的原始数据
      * key topic
-     * value 订阅数据
+     * value 订阅关系数据
      */
     protected final ConcurrentMap<String /* topic */, SubscriptionData> subscriptionInner =
         new ConcurrentHashMap<String, SubscriptionData>();
@@ -281,7 +287,7 @@ public abstract class RebalanceImpl {
                 break;
             }
             case CLUSTERING: { // 集群模式
-                // 从topic订阅信息缓存表中获取topic对应的队列信息
+                // 从缓存中获取topic下所有的队列
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 // 发送请求，从Broker中获取该消费组内当前所有的消费者客户端id
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
@@ -338,7 +344,7 @@ public abstract class RebalanceImpl {
                         allocateResultSet.addAll(allocateResult);
                     }
 
-                    // 根据分配的结果，进行ProcessQueueTable的更新
+                    // 根据分配的结果，进行本地ProcessQueueTable的更新
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(
@@ -378,6 +384,9 @@ public abstract class RebalanceImpl {
 
     /**
      * 队列均衡时，更新ProcessQueue
+     * 1. 如果队列已经删除，对应的ProcessQueue也要删除
+     * 2. 如果队列超过2分钟没有拉取动作，对应的ProcessQueue也要删除
+     * 3. 如果队列是新增的，新增一个ProcessQueue与之对应，同时新建一个拉消息请求，让新来的参与到拉消息的工作中去
      * @param topic 要重新分配队列的topic
      * @param mqSet 根据分配算法分配后的消息队列集合
      * @param isOrder
@@ -388,6 +397,7 @@ public abstract class RebalanceImpl {
         boolean changed = false;
 
         Iterator<Entry<MessageQueue, ProcessQueue>> it = this.processQueueTable.entrySet().iterator();
+        // 这个循环用来处理已经移除的队列
         while (it.hasNext()) {
             Entry<MessageQueue, ProcessQueue> next = it.next();
             MessageQueue mq = next.getKey();
@@ -404,7 +414,7 @@ public abstract class RebalanceImpl {
                         changed = true;
                         log.info("doRebalance, {}, remove unnecessary mq, {}", consumerGroup, mq);
                     }
-                } else if (pq.isPullExpired()) { // PullMessageService是否空闲
+                } else if (pq.isPullExpired()) { // PullMessageService是否空闲，超过2分钟没有拉取动作，就删除掉
                     switch (this.consumeType()) {
                         case CONSUME_ACTIVELY:
                             break;
@@ -426,7 +436,7 @@ public abstract class RebalanceImpl {
 
         // 这里放的是新的队列要进行拉数据的请求
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
-        // 下面是看有没有新增的mq
+        // 这个循环处理新增的队列
         for (MessageQueue mq : mqSet) {
             // processQueueTable不包含mq，说明mq是新增的
             if (!this.processQueueTable.containsKey(mq)) {
@@ -458,6 +468,7 @@ public abstract class RebalanceImpl {
                         log.info("doRebalance, {}, mq already exists, {}", consumerGroup, mq);
                     } else {
                         log.info("doRebalance, {}, add a new mq, {}", consumerGroup, mq);
+                        // 需要让新增的队列参与到拉取消息的工作中去
                         PullRequest pullRequest = new PullRequest();
                         // 消费组
                         pullRequest.setConsumerGroup(consumerGroup);
