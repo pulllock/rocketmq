@@ -78,7 +78,7 @@ public class NamesrvController {
         // 加载kv配置
         this.kvConfigManager.load();
 
-        // 创建Netty网络服务对象
+        // 实例化NettyRemotingServer对象的时候会创建Netty的ServerBootstrap对象以及两个EventLoopGroup对象
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
 
         this.remotingExecutor =
