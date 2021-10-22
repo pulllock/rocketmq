@@ -126,8 +126,14 @@ public class RemotingCommand {
     private HashMap<String, String> extFields;
     private transient CommandCustomHeader customHeader;
 
+    /**
+     * 用来序列化Header Data的序列化类型，有JSON和ROCKETMQ两种类型
+     */
     private SerializeType serializeTypeCurrentRPC = serializeTypeConfigInThisServer;
 
+    /**
+     * Data Body，消息体
+     */
     private transient byte[] body;
 
     protected RemotingCommand() {
@@ -190,22 +196,46 @@ public class RemotingCommand {
     }
 
     public static RemotingCommand decode(final ByteBuffer byteBuffer) {
-        // ByteBuffer总长度
+        /*
+            消息的整体编码格式如下：
+
+            解码前的数据                       解码后的数据
+            +--------+----------------+      +----------------+
+            | Length | Actual Content |----->| Actual Content |
+            +--------+----------------+      +----------------+
+
+            RocketMQ实际编码格式如下：
+            解码前                                                     解码后
+            +--------+---------------+-------------+-----------+
+            | 4Bytes |    4Bytes     |             |           |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+            | Length | Header Length | Header Data | Body Data |----->| Header Length | Header Data | Body Data |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+
+            其实到这里的byteBuffer已经是Netty解码后的数据了，已经不包含了最开始的Length域了，现在的数据如下：
+            +---------------+-------------+-----------+
+            | Header Length | Header Data | Body Data |
+            +---------------+-------------+-----------+
+
+            其中Header Length字段的前8位是存储Header Data的协议，后24位是Header Data的长度
+
+         */
+        // 接收到解码后的消息的总长度
         int length = byteBuffer.limit();
 
-        // 获取前四个字节，int类型，为总长度
+        // 消息最开始的4个字节是Header Length域，Header Length域中前8位是Header Data的协议，后24位是Header Data的长度
         int oriHeaderLen = byteBuffer.getInt();
-        // 获取消息头长度 ？？？
+        // Header Data的长度，存储在Header Length域的后24位
         int headerLength = getHeaderLength(oriHeaderLen);
 
-        // 消息头部数据
+        // Header Data
         byte[] headerData = new byte[headerLength];
         byteBuffer.get(headerData);
 
-        // 头部
+        // 根据具体的协议来解析HeaderData，协议存储在Header Length的前8位
         RemotingCommand cmd = headerDecode(headerData, getProtocolType(oriHeaderLen));
 
-        // 消息主体数据
+        // 消息主体数据Body Data，length是解码后的消息总体长度，4是最开始的Header Length的长度，headerLength是header Data的长度
         int bodyLength = length - 4 - headerLength;
         byte[] bodyData = null;
         if (bodyLength > 0) {
@@ -238,6 +268,12 @@ public class RemotingCommand {
         return null;
     }
 
+    /**
+     * 获取Header Data的协议类型
+     * Header Length前8位是协议类型，后24位是Header Data的长度
+     * @param source
+     * @return
+     */
     public static SerializeType getProtocolType(int source) {
         return SerializeType.valueOf((byte) ((source >> 24) & 0xFF));
     }
@@ -404,39 +440,62 @@ public class RemotingCommand {
      * @return
      */
     public ByteBuffer encode() {
+
+        /*
+            消息的整体编码格式如下：
+
+            解码前的数据                       解码后的数据
+            +--------+----------------+      +----------------+
+            | Length | Actual Content |----->| Actual Content |
+            +--------+----------------+      +----------------+
+
+            RocketMQ实际编码格式如下：
+            解码前                                                     解码后
+            +--------+---------------+-------------+-----------+
+            | 4Bytes |    4Bytes     |             |           |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+            | Length | Header Length | Header Data | Body Data |----->| Header Length | Header Data | Body Data |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+
+            其中Header Length字段的前8位是存储Header Data的协议，后24位是Header Data的长度
+
+         */
         // 1> header length size
-        // 消息头部长度4个字节
+        // Header Length的长度4个字节
         int length = 4;
 
         // 2> header data length
-        // 将头部数据进行编码转成字节数组，并得到头部数据大小
+        // 将Header Data进行序列化
         byte[] headerData = this.headerEncode();
+        // 4 + Header Length + Header Data
         length += headerData.length;
 
         // 3> body data length
-        // 消息主体数据大小
+        // Body Data的大小
         if (this.body != null) {
+            // 4 + Header Length + Header Data + Body Data
             length += body.length;
         }
 
         // 分配ByteBuffer
-        // 加4的原因是前面总长度的计算没有将消息长度的最前面四个字节计算在内
+        // 4 + Header Length + Header Data + Body Data + 4
+        // 这里再次加4是要把长度域Length的长度也加进去
         ByteBuffer result = ByteBuffer.allocate(4 + length);
 
         // length
-        // 消息总长度放入ByteBuffer
+        // 消息总长度放入前面4个字节，也就是长度域Length
         result.putInt(length);
 
         // header length
-        // 消息头部长度放入ByteBuffer
+        // Header Length数据
         result.put(markProtocolType(headerData.length, serializeTypeCurrentRPC));
 
         // header data
-        // 头部数据
+        // Header Data数据
         result.put(headerData);
 
         // body data;
-        // 消息主体数据
+        // Body Data数据
         if (this.body != null) {
             result.put(this.body);
         }
@@ -488,28 +547,65 @@ public class RemotingCommand {
         return encodeHeader(this.body != null ? this.body.length : 0);
     }
 
+    /**
+     * 编码Header，不包含Body
+     * @param bodyLength
+     * @return
+     */
     public ByteBuffer encodeHeader(final int bodyLength) {
+        /*
+            消息的整体编码格式如下：
+
+            解码前的数据                       解码后的数据
+            +--------+----------------+      +----------------+
+            | Length | Actual Content |----->| Actual Content |
+            +--------+----------------+      +----------------+
+
+            RocketMQ实际编码格式如下：
+            解码前                                                     解码后
+            +--------+---------------+-------------+-----------+
+            | 4Bytes |    4Bytes     |             |           |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+            | Length | Header Length | Header Data | Body Data |----->| Header Length | Header Data | Body Data |
+            +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+
+            其中Header Length字段的前8位是存储Header Data的协议，后24位是Header Data的长度
+
+         */
         // 1> header length size
+        // Header Length的长度4个字节
         int length = 4;
 
         // 2> header data length
+        // Header Data序列化后的长度
         byte[] headerData;
         headerData = this.headerEncode();
 
+        // Header Length + Header Data
         length += headerData.length;
 
         // 3> body data length
+        // Header Length + Header Data + Body Data
         length += bodyLength;
 
+        /*
+            4 + length - bodyLength
+            这里的4是Length域的长度是4字节
+
+            这里result是用来存储：Length + Header Length + Header Data的，没有Body Data。
+         */
         ByteBuffer result = ByteBuffer.allocate(4 + length - bodyLength);
 
         // length
+        // Length域，用来存储消息长度，这里消息长度不包含Length域本身长度，只有Header Length + Header Data + Body Data的长度
         result.putInt(length);
 
         // header length
+        // Header Length，前8位是序列化方式，后24位是Header Data的真实长度
         result.put(markProtocolType(headerData.length, serializeTypeCurrentRPC));
 
         // header data
+        // Header Data数据
         result.put(headerData);
 
         result.flip();
