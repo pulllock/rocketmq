@@ -74,6 +74,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     private static final long LOCK_TIMEOUT_MILLIS = 3000;
 
     private final NettyClientConfig nettyClientConfig;
+    /**
+     * 类实例化的时候直接创建一个Bootstrap
+     */
     private final Bootstrap bootstrap = new Bootstrap();
     private final EventLoopGroup eventLoopGroupWorker;
     private final Lock lockChannelTables = new ReentrantLock();
@@ -119,6 +122,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             }
         });
 
+        // 创建Netty的NioEventLoopGroup对象
         this.eventLoopGroupWorker = new NioEventLoopGroup(1, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -149,6 +153,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
     @Override
     public void start() {
+        // 执行业务逻辑之前需要进行SSL验证、编解码、空闲检查、网络连接管理等，都由defaultEventExecutorGroup来完成
         this.defaultEventExecutorGroup = new DefaultEventExecutorGroup(
             nettyClientConfig.getClientWorkerThreads(),
             new ThreadFactory() {
@@ -161,10 +166,15 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 }
             });
 
+        // Client端使用的Bootstrap，通道类型NioSocketChannel
         Bootstrap handler = this.bootstrap.group(this.eventLoopGroupWorker).channel(NioSocketChannel.class)
+            // 禁用Nagle算法，适用于小数据即时传输
             .option(ChannelOption.TCP_NODELAY, true)
+            // 如果在两小时内没有数据的通信时，TCP会自动发送一个活动探测的数据报文
             .option(ChannelOption.SO_KEEPALIVE, false)
+            // 连接超时时间
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, nettyClientConfig.getConnectTimeoutMillis())
+            // 接收缓冲区和发送缓冲区大小设置
             .option(ChannelOption.SO_SNDBUF, nettyClientConfig.getClientSocketSndBufSize())
             .option(ChannelOption.SO_RCVBUF, nettyClientConfig.getClientSocketRcvBufSize())
             .handler(new ChannelInitializer<SocketChannel>() {
@@ -173,6 +183,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     ChannelPipeline pipeline = ch.pipeline();
                     if (nettyClientConfig.isUseTLS()) {
                         if (null != sslContext) {
+                            // 处理TLS协议握手的Handler
                             pipeline.addFirst(defaultEventExecutorGroup, "sslHandler", sslContext.newHandler(ch.alloc()));
                             log.info("Prepend SSL handler");
                         } else {
@@ -181,10 +192,15 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     }
                     pipeline.addLast(
                         defaultEventExecutorGroup,
+                        // 编码器
                         new NettyEncoder(),
+                        // 解码器
                         new NettyDecoder(),
+                        // 心跳管理
                         new IdleStateHandler(0, 0, nettyClientConfig.getClientChannelMaxIdleTimeSeconds()),
+                        // 连接管理器，负责捕获新连接、断开连接、异常等事件，统一调度到NettyEventExecutor处理器处理
                         new NettyConnectManageHandler(),
+                        // 具体的业务处理
                         new NettyClientHandler());
                 }
             });
@@ -492,6 +508,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 }
 
                 if (createNewConnection) {
+                    // 连接到远程服务器
                     ChannelFuture channelFuture = this.bootstrap.connect(RemotingHelper.string2SocketAddress(addr));
                     log.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     cw = new ChannelWrapper(channelFuture);
