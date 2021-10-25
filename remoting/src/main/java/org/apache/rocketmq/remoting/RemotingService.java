@@ -17,10 +17,24 @@
 
 package org.apache.rocketmq.remoting;
 
+/**
+ * 远程服务的抽象
+ */
 public interface RemotingService {
+
+    /**
+     * 启动
+     */
     void start();
 
+    /**
+     * 关闭
+     */
     void shutdown();
 
+    /**
+     * 注册RPC的钩子
+     * @param rpcHook
+     */
     void registerRPCHook(RPCHook rpcHook);
 }

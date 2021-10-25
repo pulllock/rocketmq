@@ -149,15 +149,18 @@ public abstract class NettyRemotingAbstract {
      * @param ctx Channel handler context.
      * @param msg incoming remoting command.
      * @throws Exception if there were any error while processing the incoming command.
+     * 服务端和客户端用来处理接收到的消息
      */
     public void processMessageReceived(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
         final RemotingCommand cmd = msg;
         if (cmd != null) {
             switch (cmd.getType()) {
                 case REQUEST_COMMAND:
+                    // 请求消息
                     processRequestCommand(ctx, cmd);
                     break;
                 case RESPONSE_COMMAND:
+                    // 响应消息
                     processResponseCommand(ctx, cmd);
                     break;
                 default:
@@ -188,6 +191,7 @@ public abstract class NettyRemotingAbstract {
      *
      * @param ctx channel handler context.
      * @param cmd request command.
+     * 处理请求消息
      */
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
@@ -283,6 +287,7 @@ public abstract class NettyRemotingAbstract {
      *
      * @param ctx channel handler context.
      * @param cmd response command instance.
+     * 处理响应消息
      */
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
         final int opaque = cmd.getOpaque();

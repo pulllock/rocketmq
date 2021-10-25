@@ -47,6 +47,14 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
     | Length | Actual Content |----->| Actual Content |
     |   12   | "HELLO, WORLD" |      | "HELLO, WORLD" |
     +--------+----------------+      +----------------+
+
+    RocketMQ实际编码格式如下：
+    解码前                                                     解码后
+    +--------+---------------+-------------+-----------+
+    | 4Bytes |    4Bytes     |             |           |
+    +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
+    | Length | Header Length | Header Data | Body Data |----->| Header Length | Header Data | Body Data |
+    +--------+---------------+-------------+-----------+      +---------------+-------------+-----------+
  */
 public class NettyDecoder extends LengthFieldBasedFrameDecoder {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
@@ -68,9 +76,15 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
                 return null;
             }
 
+            /*
+                解码后的数据
+                +---------------+-------------+-----------+
+                | Header Length | Header Data | Body Data |
+                +---------------+-------------+-----------+
+             */
             ByteBuffer byteBuffer = frame.nioBuffer();
 
-            // decode中是具体的解码过程
+            // 需要RemotingCommand继续解码内部的数据格式
             return RemotingCommand.decode(byteBuffer);
         } catch (Exception e) {
             log.error("decode exception, " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()), e);

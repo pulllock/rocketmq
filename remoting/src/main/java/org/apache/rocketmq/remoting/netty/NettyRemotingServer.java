@@ -63,6 +63,9 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * 用来启动NettyServer
+ */
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
 
@@ -80,9 +83,17 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
      * Reactor模式中的主线程池
      */
     private final EventLoopGroup eventLoopGroupBoss;
+
+    /**
+     * Nettt Server的一些配置信息
+     */
     private final NettyServerConfig nettyServerConfig;
 
     private final ExecutorService publicExecutor;
+
+    /**
+     * Channel事件监听器
+     */
     private final ChannelEventListener channelEventListener;
 
     private final Timer timer = new Timer("ServerHouseKeepingService", true);
@@ -459,15 +470,27 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         }
     }
 
+    /**
+     * 服务端用来处理具体请求的Handler
+     */
     @ChannelHandler.Sharable
     class NettyServerHandler extends SimpleChannelInboundHandler<RemotingCommand> {
 
+        /**
+         * 处理具体请求
+         * @param ctx
+         * @param msg 已经经过解码并转换成RemotingCommand对象的消息
+         * @throws Exception
+         */
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
             processMessageReceived(ctx, msg);
         }
     }
 
+    /**
+     * 连接管理器，用来管理Channel注册和注销、Channel激活和连接断开、用户事件触发、异常事件处理等
+     */
     @ChannelHandler.Sharable
     class NettyConnectManageHandler extends ChannelDuplexHandler {
         @Override
