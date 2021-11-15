@@ -42,6 +42,14 @@ import org.apache.rocketmq.srvutil.ShutdownHookThread;
 import org.slf4j.LoggerFactory;
 
 public class NamesrvStartup {
+    /*
+        NameServer是一个路由注册中心，主要功能：
+        - Broker的注册功能，每个Broker定期向NameServer注册路由数据。同时还提供心跳检测，检测Broker是否存活。
+        - 为客户端提供路由功能，生产者、消费者、明康航客户端可以从Broker上查询到最新的路由信息。
+
+        NameServer可集群部署，多个NameServer之间不进行通讯，每个Broker都和每一个NameServer进行连接，每个
+        NameServer上保存了所有Broker的完整路由信息。
+     */
 
     private static InternalLogger log;
     private static Properties properties = null;
@@ -155,14 +163,22 @@ public class NamesrvStartup {
             throw new IllegalArgumentException("NamesrvController is null");
         }
 
-        // 初始化
+        /*
+            初始化
+            - 加载KV配置
+            - 实例化Netty服务相关的组建：ServerBootstrap、创建boss和worker两个EventLoopGroup
+            - 创建业务处理吸线程池
+            - 注册请求处理器：DefaultRequestProcessor
+            - 开启定时扫描不活跃的broker的定时任务、打印所有的KV配置信息的定时任务
+            - 监控TLS变化
+         */
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
 
-        // 注册shutdownHook
+        // 注册shutdownHook，在关闭的时候关闭Netty服务、关闭业务处理线程池、关闭定时任务线程池
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -171,7 +187,7 @@ public class NamesrvStartup {
             }
         }));
 
-        // 启动NamesrvController
+        // 启动NamesrvController：启动Netty服务
         controller.start();
 
         return controller;

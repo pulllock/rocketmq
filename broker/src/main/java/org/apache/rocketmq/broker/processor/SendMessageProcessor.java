@@ -113,6 +113,11 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
 
     @Override
     public boolean rejectRequest() {
+        /*
+            操作系统PageCache繁忙或者transientStorePool不足都会拒绝请求。
+            - 操作系统PageCache繁忙是指：消息写内存映射文件的时候耗时超过1秒。
+            - transientStorePool不足是指：启用了transientStorePoolEnable后查询是否还有可用的ByteBuffer，如果没有可用的，则说明繁忙
+         */
         return this.brokerController.getMessageStore().isOSPageCacheBusy() ||
             this.brokerController.getMessageStore().isTransientStorePoolDeficient();
     }

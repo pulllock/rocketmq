@@ -358,6 +358,10 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
     @Override
     public void registerDefaultProcessor(NettyRequestProcessor processor, ExecutorService executor) {
+        /*
+            注册默认请求处理器：
+            - NameServer中注册的是DefaultRequestProcessor和remotingExecutor
+         */
         this.defaultRequestProcessor = new Pair<NettyRequestProcessor, ExecutorService>(processor, executor);
     }
 

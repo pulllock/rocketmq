@@ -127,18 +127,30 @@ public class BrokerOuterAPI {
         List<String> nameServerAddressList = this.remotingClient.getNameServerAddressList();
         if (nameServerAddressList != null && nameServerAddressList.size() > 0) {
 
-            // 封装请求头
+            // 封装注册Broker请求的自定义Header
             final RegisterBrokerRequestHeader requestHeader = new RegisterBrokerRequestHeader();
+            // BrokerIP1 + 端口
             requestHeader.setBrokerAddr(brokerAddr);
+            // Broker的Id，0表示是master，其他正整数表示是slave
             requestHeader.setBrokerId(brokerId);
+            // Broker的名称
             requestHeader.setBrokerName(brokerName);
+            // Broker所在集群的名称
             requestHeader.setClusterName(clusterName);
+            /*
+                BrokerIP2，默认和BrokerIP1一样，
+                存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步
+             */
             requestHeader.setHaServerAddr(haServerAddr);
+            // 设置是否压缩
             requestHeader.setCompressed(compressed);
 
+            // 注册Broker的Body
             RegisterBrokerBody requestBody = new RegisterBrokerBody();
             requestBody.setTopicConfigSerializeWrapper(topicConfigWrapper);
             requestBody.setFilterServerList(filterServerList);
+
+            // 将Body进行编码，如果不开启压缩的话则使用FastJSON进行序列化，如果开启了压缩则使用自定义的方式进行序列化编码
             final byte[] body = requestBody.encode(compressed);
             final int bodyCrc32 = UtilAll.crc32(body);
             requestHeader.setBodyCrc32(bodyCrc32);

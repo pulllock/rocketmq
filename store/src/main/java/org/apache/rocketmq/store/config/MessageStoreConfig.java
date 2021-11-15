@@ -152,6 +152,12 @@ public class MessageStoreConfig {
     private long osPageCacheBusyTimeOutMills = 1000;
     private int defaultQueryMaxNum = 32;
 
+    /**
+     * transientStorePoolEnable确保内存映射文件一直在内存中。
+     *
+     * 可以使用Java NIO讲文件映射到内存，但是这部分内存不是常驻内存，可以被交换到虚拟内存中，会导致性能下降。
+     * RocketMQ则使用内存锁定机制，将最近要操作的commitlog文件映射到内存，并确保这个文件一直在内存中，
+     */
     @ImportantField
     private boolean transientStorePoolEnable = false;
     private int transientStorePoolSize = 5;

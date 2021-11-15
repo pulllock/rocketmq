@@ -20,7 +20,7 @@ import com.alibaba.fastjson.JSON;
 import java.nio.charset.Charset;
 
 /**
- * 使用FastJson进行序列化和翻序列化
+ * 使用FastJson进行序列化和反序列化
  */
 public abstract class RemotingSerializable {
     private final static Charset CHARSET_UTF8 = Charset.forName("UTF-8");

@@ -44,6 +44,13 @@ public class TopicConfig {
         this.perm = perm;
     }
 
+    /**
+     * 编码Topic配置：
+     * +------------+-----------+-------------+-----------+--------------+-----------+----+-----------+---------------+
+     * | Topic name | SEPARATOR |readQueueNums| SEPARATOR |writeQueueNums| SEPARATOR |perm| SEPARATOR |topicFilterType|
+     * +------------+-----------+-------------+-----------+--------------+-----------+----+-----------+---------------+
+     * @return
+     */
     public String encode() {
         StringBuilder sb = new StringBuilder();
         sb.append(this.topicName);

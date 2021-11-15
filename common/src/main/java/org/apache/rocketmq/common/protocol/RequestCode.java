@@ -17,6 +17,9 @@
 
 package org.apache.rocketmq.common.protocol;
 
+/**
+ * 请求码
+ */
 public class RequestCode {
 
     public static final int SEND_MESSAGE = 10;
@@ -80,25 +83,54 @@ public class RequestCode {
 
     public static final int GET_BROKER_CLUSTER_ACL_CONFIG = 54;
 
+    /**
+     * 设置KV配置，NameServer处理该请求
+     */
     public static final int PUT_KV_CONFIG = 100;
 
+    /**
+     * 获取KV配置，NameServer处理该请求
+     */
     public static final int GET_KV_CONFIG = 101;
 
+    /**
+     * 删除KV配置，NameServer处理该请求
+     */
     public static final int DELETE_KV_CONFIG = 102;
 
+    /**
+     * 注册Broker，NameServer处理该请求
+     */
     public static final int REGISTER_BROKER = 103;
 
+    /**
+     * 注销Broker，NameServer处理该请求
+     */
     public static final int UNREGISTER_BROKER = 104;
+
+    /**
+     * 根据Topic获取路由信息，NameServer处理该请求
+     */
     public static final int GET_ROUTEINFO_BY_TOPIC = 105;
 
+    /**
+     * 获取Broker集群信息，NameServer处理该请求
+     */
     public static final int GET_BROKER_CLUSTER_INFO = 106;
     public static final int UPDATE_AND_CREATE_SUBSCRIPTIONGROUP = 200;
     public static final int GET_ALL_SUBSCRIPTIONGROUP_CONFIG = 201;
     public static final int GET_TOPIC_STATS_INFO = 202;
     public static final int GET_CONSUMER_CONNECTION_LIST = 203;
     public static final int GET_PRODUCER_CONNECTION_LIST = 204;
+
+    /**
+     * 擦除Broker的持久化标记，NameServer处理该请求
+     */
     public static final int WIPE_WRITE_PERM_OF_BROKER = 205;
 
+    /**
+     * 从NameServer获取所有的Topic列表，NameServer处理该请求
+     */
     public static final int GET_ALL_TOPIC_LIST_FROM_NAMESERVER = 206;
 
     public static final int DELETE_SUBSCRIPTIONGROUP = 207;
@@ -116,7 +148,14 @@ public class RequestCode {
 
     public static final int DELETE_TOPIC_IN_BROKER = 215;
 
+    /**
+     * 删除Topic，NameServer处理该请求
+     */
     public static final int DELETE_TOPIC_IN_NAMESRV = 216;
+
+    /**
+     * 根据namespace获取KV列表，NameServer处理该请求
+     */
     public static final int GET_KVLIST_BY_NAMESPACE = 219;
 
     public static final int RESET_CONSUMER_CLIENT_OFFSET = 220;
@@ -129,6 +168,9 @@ public class RequestCode {
 
     public static final int QUERY_TOPIC_CONSUME_BY_WHO = 300;
 
+    /**
+     * 获取集群的Topic列表，NameServer处理该请求
+     */
     public static final int GET_TOPICS_BY_CLUSTER = 224;
 
     public static final int REGISTER_FILTER_SERVER = 301;
@@ -136,6 +178,9 @@ public class RequestCode {
 
     public static final int QUERY_CONSUME_TIME_SPAN = 303;
 
+    /**
+     * 获取系统的Topic列表，NameServer处理该请求
+     */
     public static final int GET_SYSTEM_TOPIC_LIST_FROM_NS = 304;
     public static final int GET_SYSTEM_TOPIC_LIST_FROM_BROKER = 305;
 
@@ -148,10 +193,19 @@ public class RequestCode {
 
     public static final int SEND_MESSAGE_V2 = 310;
 
+    /**
+     * 获取一个单元中的所有Topic列表，有多个机房的情况下可以设置多个单元来避免跨机房调用，NameServer处理该请求
+     */
     public static final int GET_UNIT_TOPIC_LIST = 311;
 
+    /**
+     * 获取子单元中所有Topic列表，NameServer处理该请求
+     */
     public static final int GET_HAS_UNIT_SUB_TOPIC_LIST = 312;
 
+    /**
+     * 获取子单元中所有非单元的Topic列表，NameServer处理该请求
+     */
     public static final int GET_HAS_UNIT_SUB_UNUNIT_TOPIC_LIST = 313;
 
     public static final int CLONE_GROUP_OFFSET = 314;
@@ -164,11 +218,13 @@ public class RequestCode {
 
     /**
      * update the config of name server
+     * 更新NameServer配置，NameServer处理该请求
      */
     public static final int UPDATE_NAMESRV_CONFIG = 318;
 
     /**
      * get config from name server
+     * 获取NameServer配置，NameServer处理该请求
      */
     public static final int GET_NAMESRV_CONFIG = 319;
 
@@ -176,6 +232,9 @@ public class RequestCode {
 
     public static final int QUERY_CONSUME_QUEUE = 321;
 
+    /**
+     * 从brokerLiveTable中获取data version，并判断是否已经改变，NameServer处理该请求
+     */
     public static final int QUERY_DATA_VERSION = 322;
 
     /**

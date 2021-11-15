@@ -25,19 +25,45 @@ import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
 public class RegisterBrokerRequestHeader implements CommandCustomHeader {
+    /**
+     * Broker的名称
+     */
     @CFNotNull
     private String brokerName;
+
+    /**
+     * BrokerIP1 + 端口
+     */
     @CFNotNull
     private String brokerAddr;
+
+    /**
+     * Broker所在集群的名称
+     */
     @CFNotNull
     private String clusterName;
+
+    /**
+     * BrokerIP2，默认和BrokerIP1一样，
+     * 存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步
+     */
     @CFNotNull
     private String haServerAddr;
+
+    /**
+     * Broker的Id，0表示是master，其他正整数表示是slave
+     */
     @CFNotNull
     private Long brokerId;
 
+    /**
+     * 是否压缩
+     */
     private boolean compressed;
 
+    /**
+     * 校验用的
+     */
     private Integer bodyCrc32 = 0;
 
     public void checkFields() throws RemotingCommandException {

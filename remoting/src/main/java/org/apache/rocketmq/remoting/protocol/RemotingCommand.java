@@ -124,6 +124,10 @@ public class RemotingCommand {
      *  响应自定义扩展信息
      */
     private HashMap<String, String> extFields;
+
+    /**
+     * CustomHeader会被转换成extFields，key是字段的名字，value是字段的值
+     */
     private transient CommandCustomHeader customHeader;
 
     /**
@@ -160,6 +164,11 @@ public class RemotingCommand {
         }
     }
 
+    /**
+     * 创建响应命令
+     * @param classHeader 自定义的Header，最终会被转换成extFields
+     * @return
+     */
     public static RemotingCommand createResponseCommand(Class<? extends CommandCustomHeader> classHeader) {
         return createResponseCommand(RemotingSysResponseCode.SYSTEM_ERROR, "not set any response code", classHeader);
     }
@@ -167,11 +176,16 @@ public class RemotingCommand {
     public static RemotingCommand createResponseCommand(int code, String remark,
         Class<? extends CommandCustomHeader> classHeader) {
         RemotingCommand cmd = new RemotingCommand();
+        // 响应类型：普通RPC还是单向RPC
         cmd.markResponseType();
+        // 响应码
         cmd.setCode(code);
+        // 自定义响应文本信息
         cmd.setRemark(remark);
+        // 响应版本号
         setCmdVersion(cmd);
 
+        // 实例化自定义Header
         if (classHeader != null) {
             try {
                 CommandCustomHeader objectHeader = classHeader.newInstance();
@@ -331,10 +345,17 @@ public class RemotingCommand {
         this.customHeader = customHeader;
     }
 
+    /**
+     * 从extFields中还原自定义Header
+     * @param classHeader
+     * @return
+     * @throws RemotingCommandException
+     */
     public CommandCustomHeader decodeCommandCustomHeader(
         Class<? extends CommandCustomHeader> classHeader) throws RemotingCommandException {
         CommandCustomHeader objectHeader;
         try {
+            // 实例化自定义Header
             objectHeader = classHeader.newInstance();
         } catch (InstantiationException e) {
             return null;
@@ -342,6 +363,7 @@ public class RemotingCommand {
             return null;
         }
 
+        // 从extFields中还原
         if (this.extFields != null) {
 
             Field[] fields = getClazzFields(classHeader);

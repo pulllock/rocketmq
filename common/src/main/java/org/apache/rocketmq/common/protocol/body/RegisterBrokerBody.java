@@ -56,20 +56,32 @@ public class RegisterBrokerBody extends RemotingSerializable {
         ConcurrentMap<String, TopicConfig> topicConfigTable = cloneTopicConfigTable(topicConfigSerializeWrapper.getTopicConfigTable());
         assert topicConfigTable != null;
         try {
+            // DataVersion直接使用FastJSON序列化
             byte[] buffer = dataVersion.encode();
 
             // write data version
+            // DataVersion长度
             outputStream.write(convertIntToByteArray(buffer.length));
+            // DataVersion数据
             outputStream.write(buffer);
 
+            // Topic配置个数
             int topicNumber = topicConfigTable.size();
 
             // write number of topic configs
+            // Topic配置个数
             outputStream.write(convertIntToByteArray(topicNumber));
 
             // write topic config entry one by one.
             for (ConcurrentMap.Entry<String, TopicConfig> next : topicConfigTable.entrySet()) {
+                /*
+                    每个Topic配置编码：
+                    +--------------+-----------+-------------+-----------+--------------+-----------+----+-----------+---------------+
+                    |  Topic name  | SEPARATOR |readQueueNums| SEPARATOR |writeQueueNums| SEPARATOR |perm| SEPARATOR |topicFilterType|
+                    +--------------+-----------+-------------+-----------+--------------+-----------+----+-----------+---------------+
+                 */
                 buffer = next.getValue().encode().getBytes(MixAll.DEFAULT_CHARSET);
+                // Topic编码后长度
                 outputStream.write(convertIntToByteArray(buffer.length));
                 outputStream.write(buffer);
             }
