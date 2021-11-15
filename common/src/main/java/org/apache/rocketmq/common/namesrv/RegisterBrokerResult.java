@@ -19,8 +19,20 @@ package org.apache.rocketmq.common.namesrv;
 
 import org.apache.rocketmq.common.protocol.body.KVTable;
 
+/**
+ * Broker注册的结果
+ */
 public class RegisterBrokerResult {
+
+    /**
+     * 存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步
+     * 如果是从Broker注册，则该值是Master的BrokerIP2的值
+     */
     private String haServerAddr;
+
+    /**
+     * 主Broker的地址
+     */
     private String masterAddr;
     private KVTable kvTable;
 

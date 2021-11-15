@@ -155,16 +155,19 @@ public class BrokerOuterAPI {
             final int bodyCrc32 = UtilAll.crc32(body);
             requestHeader.setBodyCrc32(bodyCrc32);
             final CountDownLatch countDownLatch = new CountDownLatch(nameServerAddressList.size());
-            // 遍历所有的NameServer列表
+            // 遍历所有的NameServer列表，向每一个NameServer进行注册Broker信息
             for (final String namesrvAddr : nameServerAddressList) {
                 brokerOuterExecutor.execute(new Runnable() {
                     @Override
                     public void run() {
                         try {
-                            // 发送心跳包，RequestCode是REGISTER_BROKER = 103
-                            // 对应的处理在namesrv的DefaultRequestProcessor.processRequest中进行处理
+                            /*
+                                注册Broker到NameServer，RequestCode是REGISTER_BROKER = 103。
+                                该请求在NameServer的DefaultRequestProcessor中进行处理
+                             */
                             RegisterBrokerResult result = registerBroker(namesrvAddr, oneway, timeoutMills, requestHeader, body);
                             if (result != null) {
+                                // 注册的结果添加到集合中
                                 registerBrokerResultList.add(result);
                             }
 
@@ -195,11 +198,13 @@ public class BrokerOuterAPI {
         final byte[] body
     ) throws RemotingCommandException, MQBrokerException, RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException,
         InterruptedException {
+        // 创建请求命令，请求码是REGISTER_BROKER = 103
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.REGISTER_BROKER, requestHeader);
         request.setBody(body);
 
         if (oneway) {
             try {
+                // 单向发送请求
                 this.remotingClient.invokeOneway(namesrvAddr, request, timeoutMills);
             } catch (RemotingTooMuchRequestException e) {
                 // Ignore
@@ -207,10 +212,13 @@ public class BrokerOuterAPI {
             return null;
         }
 
+        // 同步发送请求到NameServer
         RemotingCommand response = this.remotingClient.invokeSync(namesrvAddr, request, timeoutMills);
         assert response != null;
         switch (response.getCode()) {
+            // 注册成功
             case ResponseCode.SUCCESS: {
+                // 解析响应信息
                 RegisterBrokerResponseHeader responseHeader =
                     (RegisterBrokerResponseHeader) response.decodeCommandCustomHeader(RegisterBrokerResponseHeader.class);
                 RegisterBrokerResult result = new RegisterBrokerResult();
@@ -225,6 +233,7 @@ public class BrokerOuterAPI {
                 break;
         }
 
+        // 不成功的就抛异常
         throw new MQBrokerException(response.getCode(), response.getRemark(), requestHeader == null ? null : requestHeader.getBrokerAddr());
     }
 

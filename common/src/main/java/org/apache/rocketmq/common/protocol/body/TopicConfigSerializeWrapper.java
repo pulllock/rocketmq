@@ -24,6 +24,9 @@ import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
 public class TopicConfigSerializeWrapper extends RemotingSerializable {
+    /**
+     * Topic配置表：topicName和Topic配置的映射
+     */
     private ConcurrentMap<String, TopicConfig> topicConfigTable =
         new ConcurrentHashMap<String, TopicConfig>();
     private DataVersion dataVersion = new DataVersion();

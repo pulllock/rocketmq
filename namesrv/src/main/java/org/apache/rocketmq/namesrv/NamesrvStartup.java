@@ -49,6 +49,10 @@ public class NamesrvStartup {
 
         NameServer可集群部署，多个NameServer之间不进行通讯，每个Broker都和每一个NameServer进行连接，每个
         NameServer上保存了所有Broker的完整路由信息。
+
+        一个主Broker向所有的NameServer注册后，NameServer会保存Topic对应的队列信息，并返回成功。
+        一个从Broker向所有的NameServer注册后，NameServer会保存Topic对应的队列信息，并将对应Master的地址以及Master的BrokerIP2
+        配置的地址返回给从Broker，从Broker会通过此地址和Master进行同步。
      */
 
     private static InternalLogger log;

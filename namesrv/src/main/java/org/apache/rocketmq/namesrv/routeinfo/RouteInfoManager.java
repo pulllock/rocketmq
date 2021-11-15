@@ -132,6 +132,18 @@ public class RouteInfoManager {
         return topicList.encode();
     }
 
+    /**
+     * 注册Broker
+     * @param clusterName
+     * @param brokerAddr
+     * @param brokerName
+     * @param brokerId
+     * @param haServerAddr
+     * @param topicConfigWrapper
+     * @param filterServerList
+     * @param channel
+     * @return
+     */
     public RegisterBrokerResult registerBroker(
         final String clusterName,
         final String brokerAddr,
@@ -144,12 +156,14 @@ public class RouteInfoManager {
         RegisterBrokerResult result = new RegisterBrokerResult();
         try {
             try {
+                // 加锁
                 this.lock.writeLock().lockInterruptibly();
 
-                // 获取集群下的所有Broker
+                // 集群名字和集群对应的Broker名字的关系
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
+                    // 将要注册的Broker所在集群的名字以及对应Broker名字映射关系放到clusterAddrTable中
                     this.clusterAddrTable.put(clusterName, brokerNames);
                 }
                 brokerNames.add(brokerName);
@@ -164,44 +178,55 @@ public class RouteInfoManager {
                     this.brokerAddrTable.put(brokerName, brokerData);
                 }
 
-                // slave变成master的时候，需要将原来slave删除，然后添加成master
+                /*
+                    slave变成master的时候，需要将原来slave删除，然后添加成master。
+                    如果Master挂了，需要将RocketMQ的Slave转成Master，需要手动停止Slave，
+                    更改配置文件变成Master后用新的配置文件启动Broker。
+                 */
                 Map<Long, String> brokerAddrsMap = brokerData.getBrokerAddrs();
                 //Switch slave to master: first remove <1, IP:PORT> in namesrv, then add <0, IP:PORT>
                 //The same IP:PORT must only have one record in brokerAddrTable
                 Iterator<Entry<Long, String>> it = brokerAddrsMap.entrySet().iterator();
                 while (it.hasNext()) {
                     Entry<Long, String> item = it.next();
+                    // broker地址存在，但是brokerId变了，说明是由slave变为master，需要将旧的Broker删除掉
                     if (null != brokerAddr && brokerAddr.equals(item.getValue()) && brokerId != item.getKey()) {
+                        // 将原来Slave角色的Broker删除掉
                         it.remove();
                     }
                 }
 
+                /*
+                    第一次注册的时候直接put进去后，oldAddr为null。
+                    如果是slave变为master，则put了brokerId=0进去后，返回的oldAddr为原来的老的Master角色的Broker
+                 */
                 String oldAddr = brokerData.getBrokerAddrs().put(brokerId, brokerAddr);
                 registerFirst = registerFirst || (null == oldAddr);
 
-                // 如果Broker是Master节点
+                // 如果当前要注册的Broker是Master节点
                 if (null != topicConfigWrapper
                     && MixAll.MASTER_ID == brokerId) {
-                    // 如果Topic信息更新，或者是首次注册
+                    // 如果Broker的Topic信息发生了更新，或者是首次注册的Broker，则需要创建或者更新Topic路由数据
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion())
                         || registerFirst) {
                         ConcurrentMap<String, TopicConfig> tcTable =
                             topicConfigWrapper.getTopicConfigTable();
                         if (tcTable != null) {
                             for (Map.Entry<String, TopicConfig> entry : tcTable.entrySet()) {
-                                // 创建更新topic队列信息
+                                // 创建或更新topic队列信息
                                 this.createAndUpdateQueueData(brokerName, entry.getValue());
                             }
                         }
                     }
                 }
 
-                // 更新BrokerLiveInfo状态信息
+                // 更新BrokerLiveInfo状态信息，表示当前注册的Broker是活着的
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                     new BrokerLiveInfo(
                         System.currentTimeMillis(),
                         topicConfigWrapper.getDataVersion(),
                         channel,
+                        // haServerAddr是请求中带来的BrokerIP2配置的IP+PORT
                         haServerAddr));
                 if (null == prevBrokerLiveInfo) {
                     log.info("new broker registered, {} HAServer: {}", brokerAddr, haServerAddr);
@@ -215,12 +240,16 @@ public class RouteInfoManager {
                     }
                 }
 
+                // 如果Broker是slave节点
                 if (MixAll.MASTER_ID != brokerId) {
+                    // 从缓存中查找master节点的地址
                     String masterAddr = brokerData.getBrokerAddrs().get(MixAll.MASTER_ID);
                     if (masterAddr != null) {
                         BrokerLiveInfo brokerLiveInfo = this.brokerLiveTable.get(masterAddr);
                         if (brokerLiveInfo != null) {
+                            // 是从请求中带来的BrokerIP2配置的IP+PORT
                             result.setHaServerAddr(brokerLiveInfo.getHaServerAddr());
+                            // master节点的地址
                             result.setMasterAddr(masterAddr);
                         }
                     }
@@ -256,37 +285,57 @@ public class RouteInfoManager {
         }
     }
 
+    /**
+     * 创建或更新Topic路由信息
+     * @param brokerName Broker名字
+     * @param topicConfig Broker下的Topic配置信息
+     */
     private void createAndUpdateQueueData(final String brokerName, final TopicConfig topicConfig) {
         QueueData queueData = new QueueData();
+        // 队列所属的Broker的名字
         queueData.setBrokerName(brokerName);
+        // 写队列数量
         queueData.setWriteQueueNums(topicConfig.getWriteQueueNums());
+        // 读队列数量
         queueData.setReadQueueNums(topicConfig.getReadQueueNums());
+        // 队列的读写权限
         queueData.setPerm(topicConfig.getPerm());
+        // Topic的系统标志
         queueData.setTopicSysFlag(topicConfig.getTopicSysFlag());
 
+        // topicQueueTable保存着一个Topic下所有的队列信息
         List<QueueData> queueDataList = this.topicQueueTable.get(topicConfig.getTopicName());
+        // 说明该Topic是新建的
         if (null == queueDataList) {
             queueDataList = new LinkedList<QueueData>();
             queueDataList.add(queueData);
+            // 将新的Topic信息放到缓存中
             this.topicQueueTable.put(topicConfig.getTopicName(), queueDataList);
             log.info("new topic registered, {} {}", topicConfig.getTopicName(), queueData);
-        } else {
+        }
+        // 说明当前缓存中已经有该Topic信息
+        else {
             boolean addNewOne = true;
 
             Iterator<QueueData> it = queueDataList.iterator();
             while (it.hasNext()) {
                 QueueData qd = it.next();
+                // 当前Broker和已经存在的Topic的Broker是同一个
                 if (qd.getBrokerName().equals(brokerName)) {
+                    // 看下旧的队列信息和新的队列信息是否一样
                     if (qd.equals(queueData)) {
                         addNewOne = false;
                     } else {
+                        // 旧的队列信息和新的队列信息不一样，说明Topic对应的队列发生了变化
                         log.info("topic changed, {} OLD: {} NEW: {}", topicConfig.getTopicName(), qd,
                             queueData);
+                        // 旧的队列信息需要删除掉
                         it.remove();
                     }
                 }
             }
 
+            // 旧的和新的不一样，旧的队列删除掉，需要添加新的队列数据到缓存中
             if (addNewOne) {
                 queueDataList.add(queueData);
             }

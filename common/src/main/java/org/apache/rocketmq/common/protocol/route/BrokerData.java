@@ -36,7 +36,7 @@ public class BrokerData implements Comparable<BrokerData> {
     private String brokerName;
 
     /**
-     * 集群下所有的broker地址
+     * 集群下所有的broker地址，brokerId和Broker地址对应关系
      */
     private HashMap<Long/* brokerId */, String/* broker address */> brokerAddrs;
 

@@ -231,7 +231,16 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         final RemotingCommand response = RemotingCommand.createResponseCommand(RegisterBrokerResponseHeader.class);
         // 响应的自定义Header
         final RegisterBrokerResponseHeader responseHeader = (RegisterBrokerResponseHeader) response.readCustomHeader();
-        // 请求的自定义Header
+        /*
+            请求的自定义Header，Header中包含了：
+            - Broker的名称
+            - BrokerIP1+端口
+            - Broker所在集群名称
+            - BrokerIP2+端口，存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步
+            - Broker的Id，0表示是master，其他正整数表示是slave
+            - 是否压缩
+            - 校验用的值
+         */
         final RegisterBrokerRequestHeader requestHeader =
             (RegisterBrokerRequestHeader) request.decodeCommandCustomHeader(RegisterBrokerRequestHeader.class);
 
@@ -247,7 +256,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
 
         if (request.getBody() != null) {
             try {
-                // 解码请求的Body
+                // 解码请求的Body，body中包含Topic配置信息以及filterServer信息
                 registerBrokerBody = RegisterBrokerBody.decode(request.getBody(), requestHeader.isCompressed());
             } catch (Exception e) {
                 throw new RemotingCommandException("Failed to decode RegisterBrokerBody", e);
@@ -268,9 +277,17 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
             registerBrokerBody.getFilterServerList(),
             ctx.channel());
 
+        /*
+            HaServer是从Master节点的请求中带过来的，
+            存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步。
+            也就是说如果当前注册的是从Broker的话，会把这个HaServerAddr返回给从Broker，从Broker拿到这个地址后会使用该地址
+            和主Broker进行同步
+         */
         responseHeader.setHaServerAddr(result.getHaServerAddr());
+        // 主Broker的地址
         responseHeader.setMasterAddr(result.getMasterAddr());
 
+        // 这地方可先跳过去不看
         byte[] jsonValue = this.namesrvController.getKvConfigManager().getKVListByNamespace(NamesrvUtil.NAMESPACE_ORDER_TOPIC_CONFIG);
         response.setBody(jsonValue);
 
