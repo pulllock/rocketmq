@@ -451,8 +451,10 @@ public abstract class NettyRemotingAbstract {
 
         try {
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis, null, null);
+            // 响应缓存表：requestId和responseFuture对应关系
             this.responseTable.put(opaque, responseFuture);
             final SocketAddress addr = channel.remoteAddress();
+            // 发送请求
             channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture f) throws Exception {
@@ -463,6 +465,7 @@ public abstract class NettyRemotingAbstract {
                         responseFuture.setSendRequestOK(false);
                     }
 
+                    // 响应如果不成功，从缓存中移除掉
                     responseTable.remove(opaque);
                     responseFuture.setCause(f.cause());
                     responseFuture.putResponse(null);
@@ -470,6 +473,7 @@ public abstract class NettyRemotingAbstract {
                 }
             });
 
+            // 同步等待响应信息
             RemotingCommand responseCommand = responseFuture.waitResponse(timeoutMillis);
             if (null == responseCommand) {
                 if (responseFuture.isSendRequestOK()) {
@@ -482,6 +486,7 @@ public abstract class NettyRemotingAbstract {
 
             return responseCommand;
         } finally {
+            // 响应完成后，从缓存中移除掉
             this.responseTable.remove(opaque);
         }
     }

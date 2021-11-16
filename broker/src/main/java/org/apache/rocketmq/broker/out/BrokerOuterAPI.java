@@ -110,6 +110,20 @@ public class BrokerOuterAPI {
         this.remotingClient.updateNameServerAddressList(lst);
     }
 
+    /**
+     * 向所有的NameServer注册当前Broker信息
+     * @param clusterName 集群名称
+     * @param brokerAddr Broker地址
+     * @param brokerName Broker名称
+     * @param brokerId Broker Id
+     * @param haServerAddr 高可用用的服务地址
+     * @param topicConfigWrapper Topic配置包装
+     * @param filterServerList
+     * @param oneway 是否单向RPC
+     * @param timeoutMills 超时时间
+     * @param compressed 是否压缩
+     * @return
+     */
     public List<RegisterBrokerResult> registerBrokerAll(
         final String clusterName,
         final String brokerAddr,
@@ -190,6 +204,21 @@ public class BrokerOuterAPI {
         return registerBrokerResultList;
     }
 
+    /**
+     * 注册Broker到NameServer中，注册或者心跳
+     * @param namesrvAddr NameServer地址
+     * @param oneway 是否是单向RPC
+     * @param timeoutMills 超时时间
+     * @param requestHeader 请求头
+     * @param body 请求内容
+     * @return
+     * @throws RemotingCommandException
+     * @throws MQBrokerException
+     * @throws RemotingConnectException
+     * @throws RemotingSendRequestException
+     * @throws RemotingTimeoutException
+     * @throws InterruptedException
+     */
     private RegisterBrokerResult registerBroker(
         final String namesrvAddr,
         final boolean oneway,
@@ -222,8 +251,11 @@ public class BrokerOuterAPI {
                 RegisterBrokerResponseHeader responseHeader =
                     (RegisterBrokerResponseHeader) response.decodeCommandCustomHeader(RegisterBrokerResponseHeader.class);
                 RegisterBrokerResult result = new RegisterBrokerResult();
+                // 主Broker的地址
                 result.setMasterAddr(responseHeader.getMasterAddr());
+                // HA高可用地址
                 result.setHaServerAddr(responseHeader.getHaServerAddr());
+                // body中存放的是从NameServer中返回的KV配置信息
                 if (response.getBody() != null) {
                     result.setKvTable(KVTable.decode(response.getBody(), KVTable.class));
                 }

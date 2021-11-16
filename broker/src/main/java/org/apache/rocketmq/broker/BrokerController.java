@@ -911,6 +911,11 @@ public class BrokerController {
 
     }
 
+    /**
+     * 将当前Broker中增量的数据注册到NameServer中
+     * @param topicConfig
+     * @param dataVersion 在新增或更新Topic的时候，数据版本都会更新
+     */
     public synchronized void registerIncrementBrokerData(TopicConfig topicConfig, DataVersion dataVersion) {
         TopicConfig registerTopicConfig = topicConfig;
         if (!PermName.isWriteable(this.getBrokerConfig().getBrokerPermission())
@@ -926,6 +931,7 @@ public class BrokerController {
         topicConfigSerializeWrapper.setDataVersion(dataVersion);
         topicConfigSerializeWrapper.setTopicConfigTable(topicConfigTable);
 
+        // 向所有的NameServer注册Broker
         doRegisterBrokerAll(true, false, topicConfigSerializeWrapper);
     }
 
@@ -933,6 +939,7 @@ public class BrokerController {
      * 注册Broker到NameServer上，触发的场景：
      * - Broker启动的时候触发
      * - 定时任务触发
+     * - 更新Broker配置的时候触发
      * @param checkOrderConfig
      * @param oneway
      * @param forceRegister
@@ -966,13 +973,26 @@ public class BrokerController {
         }
     }
 
+    /**
+     * 向所有的NameServer注册Broker
+     * - 更新或新增Topic的时候，会调用这里向NameServer注册Broker信息
+     * - Broker启动的时候，需要向NameServer注册Broker信息
+     * - 定时任务定时向NameServer注册Broker信息
+     * - 更新Broker配置的时候向NameServer注册Broker信息
+     * @param checkOrderConfig
+     * @param oneway
+     * @param topicConfigWrapper
+     */
     private void doRegisterBrokerAll(boolean checkOrderConfig, boolean oneway,
         TopicConfigSerializeWrapper topicConfigWrapper) {
+        // 向所有的NameServer注册Broker
         List<RegisterBrokerResult> registerBrokerResultList = this.brokerOuterAPI.registerBrokerAll(
             this.brokerConfig.getBrokerClusterName(),
+            // brokerIP1地址
             this.getBrokerAddr(),
             this.brokerConfig.getBrokerName(),
             this.brokerConfig.getBrokerId(),
+            // brokerIP2地址
             this.getHAServerAddr(),
             topicConfigWrapper,
             this.filterServerManager.buildNewFilterServerList(),
@@ -1176,6 +1196,10 @@ public class BrokerController {
         }
     }
 
+    /**
+     * Broker变成Slave角色
+     * @param brokerId
+     */
     public void changeToSlave(int brokerId) {
         log.info("Begin to change to slave brokerName={} brokerId={}", brokerConfig.getBrokerName(), brokerId);
 
@@ -1201,6 +1225,7 @@ public class BrokerController {
         handleSlaveSynchronize(BrokerRole.SLAVE);
 
         try {
+            // 注册到NameServer
             this.registerBrokerAll(true, true, brokerConfig.isForceRegister());
         } catch (Throwable ignored) {
 
@@ -1209,7 +1234,10 @@ public class BrokerController {
     }
 
 
-
+    /**
+     * 变成Master角色
+     * @param role
+     */
     public void changeToMaster(BrokerRole role) {
         if (role == BrokerRole.SLAVE) {
             return;
@@ -1238,6 +1266,7 @@ public class BrokerController {
         messageStoreConfig.setBrokerRole(role);
 
         try {
+            // 注册到NameServer
             this.registerBrokerAll(true, true, brokerConfig.isForceRegister());
         } catch (Throwable ignored) {
 

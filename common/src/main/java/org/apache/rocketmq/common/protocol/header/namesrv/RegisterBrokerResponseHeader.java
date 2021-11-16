@@ -25,8 +25,17 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
  * 注册Broker到NameServer请求对应的响应信息的Header
  */
 public class RegisterBrokerResponseHeader implements CommandCustomHeader {
+
+    /**
+     * 高可用地址，存在主从broker时，如果在broker主节点上配置了brokerIP2属性，broker从节点会连接主节点配置的brokerIP2进行同步
+     * 如果是从Broker注册，则该值是Master的BrokerIP2的值
+     */
     @CFNullable
     private String haServerAddr;
+
+    /**
+     * 主Broker的地址
+     */
     @CFNullable
     private String masterAddr;
 

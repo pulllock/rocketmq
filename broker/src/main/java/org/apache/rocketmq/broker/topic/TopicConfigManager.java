@@ -370,7 +370,12 @@ public class TopicConfigManager extends ConfigManager {
         }
     }
 
+    /**
+     * 更新Topic配置并持久化到硬盘
+     * @param topicConfig
+     */
     public void updateTopicConfig(final TopicConfig topicConfig) {
+        // 更新Topic配置缓存
         TopicConfig old = this.topicConfigTable.put(topicConfig.getTopicName(), topicConfig);
         if (old != null) {
             log.info("update topic config, old:[{}] new:[{}]", old, topicConfig);
@@ -378,8 +383,10 @@ public class TopicConfigManager extends ConfigManager {
             log.info("create new topic [{}]", topicConfig);
         }
 
+        // 更新数据的版本
         this.dataVersion.nextVersion();
 
+        // 持久化到硬盘
         this.persist();
     }
 
@@ -467,6 +474,11 @@ public class TopicConfigManager extends ConfigManager {
         }
     }
 
+    /**
+     * 使用JSON进行编码
+     * @param prettyFormat
+     * @return
+     */
     public String encode(final boolean prettyFormat) {
         TopicConfigSerializeWrapper topicConfigSerializeWrapper = new TopicConfigSerializeWrapper();
         topicConfigSerializeWrapper.setTopicConfigTable(this.topicConfigTable);

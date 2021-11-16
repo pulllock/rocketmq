@@ -30,14 +30,28 @@ public class RequestCode {
     public static final int QUERY_BROKER_OFFSET = 13;
     public static final int QUERY_CONSUMER_OFFSET = 14;
     public static final int UPDATE_CONSUMER_OFFSET = 15;
+
+    /**
+     * 更新或新增Topic
+     */
     public static final int UPDATE_AND_CREATE_TOPIC = 17;
+
+    /**
+     * 获取所有Topic配置
+     */
     public static final int GET_ALL_TOPIC_CONFIG = 21;
     public static final int GET_TOPIC_CONFIG_LIST = 22;
 
     public static final int GET_TOPIC_NAME_LIST = 23;
 
+    /**
+     * 更新Broker配置
+     */
     public static final int UPDATE_BROKER_CONFIG = 25;
 
+    /**
+     * 获取Broker配置
+     */
     public static final int GET_BROKER_CONFIG = 26;
 
     public static final int TRIGGER_DELETE_FILES = 27;
@@ -146,10 +160,13 @@ public class RequestCode {
 
     public static final int WHO_CONSUME_THE_MESSAGE = 214;
 
+    /**
+     * 删除Broker中的Topic
+     */
     public static final int DELETE_TOPIC_IN_BROKER = 215;
 
     /**
-     * 删除Topic，NameServer处理该请求
+     * 删除NameServer中的Topic，NameServer处理该请求
      */
     public static final int DELETE_TOPIC_IN_NAMESRV = 216;
 
