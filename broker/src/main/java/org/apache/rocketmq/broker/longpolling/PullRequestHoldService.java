@@ -29,7 +29,22 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.ConsumeQueueExt;
 
+/**
+ * 拉取消息请求挂起服务，拉取消息的时候如果拉取不到消息会将请求挂起，不是直接响应返回
+ */
 public class PullRequestHoldService extends ServiceThread {
+    /*
+        长轮询和短轮询
+        - 短轮询是客户端发起请求，服务端接收请求后立即进行响应
+        - 长轮询是客户端发起请求后，如果服务端没有具体的要查询的数据可以返回，则不会立即返回给客户端，服务端会先Hold住这个请求，
+          等到服务端有数据了就会对客户端进行响应，或者等超时时间到了也会进行响应
+
+          RocketMQ在消费者到Broker拉取消息的时候可以选择是短轮询还是长轮询，通过longPollingEnable来控制
+          - 短轮询，未拉取到消息后会等待shortPollingTimeMills时间后再尝试拉取，默认为1s
+          - 长轮询，消费者端可以设置挂起超时时间brokerSuspendMaxTimeMillis默认20s，PullRequestHoldService每隔5秒重试看有
+            没有消息到来，DefaultMessageStore#ReputMessageService中有消息达到的时候也会主动的调用PullRequestHoldService
+            的方法重试拉取
+     */
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final String TOPIC_QUEUEID_SEPARATOR = "@";
     private final BrokerController brokerController;

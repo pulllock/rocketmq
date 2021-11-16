@@ -64,6 +64,9 @@ import org.apache.rocketmq.store.index.QueryOffsetResult;
 import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
+/**
+ * 消息存储服务，每个Broker中都有一个MessageStore，用来存储发送到Broker上的消息
+ */
 public class DefaultMessageStore implements MessageStore {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -118,6 +121,9 @@ public class DefaultMessageStore implements MessageStore {
      */
     private final HAService haService;
 
+    /**
+     * 延迟消息处理的服务
+     */
     private final ScheduleMessageService scheduleMessageService;
 
     private final StoreStatsService storeStatsService;
@@ -234,14 +240,17 @@ public class DefaultMessageStore implements MessageStore {
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
 
+            // 加载延迟消息消费队列进度
             if (null != scheduleMessageService) {
                 result = result && this.scheduleMessageService.load();
             }
 
             // load Commit Log
+            // 加载commitlog
             result = result && this.commitLog.load();
 
             // load Consume Queue
+            // 加载消费队列
             result = result && this.loadConsumeQueue();
 
             if (result) {
@@ -267,6 +276,7 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
+     * 启动消息存储服务
      * @throws Exception
      */
     public void start() throws Exception {

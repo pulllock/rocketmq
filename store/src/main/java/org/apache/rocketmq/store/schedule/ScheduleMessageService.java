@@ -193,6 +193,10 @@ public class ScheduleMessageService extends ConfigManager {
         return this.encode(false);
     }
 
+    /**
+     * 延迟消息消费队列消息队列进度加载
+     * @return
+     */
     public boolean load() {
         // 延迟消息消费队列消息队列进度加载
         boolean result = super.load();

@@ -49,18 +49,34 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.rocketmq.remoting.netty.TlsSystemConfig.TLS_ENABLE;
 
 public class BrokerStartup {
+
+    /*
+        Broker启动后会监听三个端口：
+        - remotingServer监听listenPort指定的端口，默认10911，可以处理客户端所有请求
+        - fastRemotingServer监听端口为listenPort-2，默认10909，基本和remotingServer一样，但是fastRemotingServer不能处理
+          消费者拉取消息的请求。Broker向NameServer注册的时候只会注册remotingServer。默认情况下生产者发送消息是请求fastRemotingServer，
+          也可以通过配置使用remotingServer。
+        - haServer监听端口为listenPort+1，默认10912，用于Broker的主从同步
+     */
     public static Properties properties = null;
     public static CommandLine commandLine = null;
     public static String configFile = null;
     public static InternalLogger log;
 
     public static void main(String[] args) {
+        // 创建Broker Controller实例、启动Broker
         start(createBrokerController(args));
     }
 
+    /**
+     * Broker启动
+     * @param controller
+     * @return
+     */
     public static BrokerController start(BrokerController controller) {
         try {
 
+            // 启动
             controller.start();
 
             String tip = "The broker[" + controller.getBrokerConfig().getBrokerName() + ", "
@@ -87,6 +103,11 @@ public class BrokerStartup {
         }
     }
 
+    /**
+     * 创建BrokerController实例，并初始化
+     * @param args
+     * @return
+     */
     public static BrokerController createBrokerController(String[] args) {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
 
@@ -107,13 +128,17 @@ public class BrokerStartup {
                 System.exit(-1);
             }
 
+            // Broker配置
             final BrokerConfig brokerConfig = new BrokerConfig();
+            // Netty服务配置
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+            // Netty客户端配置
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
 
             nettyClientConfig.setUseTLS(Boolean.parseBoolean(System.getProperty(TLS_ENABLE,
                 String.valueOf(TlsSystemConfig.tlsMode == TlsMode.ENFORCING))));
             nettyServerConfig.setListenPort(10911);
+            // 消息存储服务的配置
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
 
             if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
@@ -182,6 +207,7 @@ public class BrokerStartup {
                 brokerConfig.setBrokerId(-1);
             }
 
+            // 高可用监听的端口是Netty服务端口+1
             messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
             LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
@@ -211,6 +237,9 @@ public class BrokerStartup {
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
 
+            /*
+                创建BrokerController实例
+             */
             final BrokerController controller = new BrokerController(
                 brokerConfig,
                 nettyServerConfig,
@@ -219,12 +248,14 @@ public class BrokerStartup {
             // remember all configs to prevent discard
             controller.getConfiguration().registerConfig(properties);
 
+            // BrokerController初始化
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();
                 System.exit(-3);
             }
 
+            // 注册关闭钩子
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 private volatile boolean hasShutdown = false;
                 private AtomicInteger shutdownTimes = new AtomicInteger(0);
@@ -236,6 +267,7 @@ public class BrokerStartup {
                         if (!this.hasShutdown) {
                             this.hasShutdown = true;
                             long beginTime = System.currentTimeMillis();
+                            // BrokerController关闭
                             controller.shutdown();
                             long consumingTimeTotal = System.currentTimeMillis() - beginTime;
                             log.info("Shutdown hook over, consuming total time(ms): {}", consumingTimeTotal);

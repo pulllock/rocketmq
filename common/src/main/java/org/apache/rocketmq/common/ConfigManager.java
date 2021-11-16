@@ -21,11 +21,18 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * 配置管理
+ */
 public abstract class ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 
     public abstract String encode();
 
+    /**
+     * 加载配置
+     * @return
+     */
     public boolean load() {
         String fileName = null;
         try {

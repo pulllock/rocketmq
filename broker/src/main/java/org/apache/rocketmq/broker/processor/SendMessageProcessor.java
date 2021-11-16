@@ -58,6 +58,8 @@ import org.apache.rocketmq.store.config.StorePathConfigHelper;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
 /**
+ * 发送消息的请求处理器
+ *
  * 当Consume消费某条消息失败时，会调用该接口发回消息，Broker会存储发回的消息，
  * 下次Consumer拉取该消息，能从CommitLog和ConsumeQueue顺序读取
  */

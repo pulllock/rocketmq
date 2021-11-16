@@ -20,6 +20,9 @@ import java.io.File;
 import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.store.ConsumeQueue;
 
+/**
+ * 消息存储服务的配置
+ */
 public class MessageStoreConfig {
     //The root directory in which the log data is kept
     // Broker存储根目录，默认为$BROKER_HOMR/store

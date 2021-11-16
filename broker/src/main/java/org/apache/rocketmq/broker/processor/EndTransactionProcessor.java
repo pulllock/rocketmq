@@ -41,6 +41,7 @@ import org.apache.rocketmq.store.config.BrokerRole;
 
 /**
  * EndTransaction processor: process commit and rollback message
+ * 事务结束的处理器，处理提交或者回滚事务
  */
 public class EndTransactionProcessor extends AsyncNettyRequestProcessor implements NettyRequestProcessor {
     private static final InternalLogger LOGGER = InternalLoggerFactory.getLogger(LoggerName.TRANSACTION_LOGGER_NAME);

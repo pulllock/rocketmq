@@ -21,6 +21,9 @@ import org.apache.rocketmq.store.MessageArrivingListener;
 
 import java.util.Map;
 
+/**
+ * 通知有新消息到达的监听器，用在长轮询模式下
+ */
 public class NotifyMessageArrivingListener implements MessageArrivingListener {
     private final PullRequestHoldService pullRequestHoldService;
 
