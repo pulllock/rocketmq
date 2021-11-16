@@ -24,6 +24,7 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
 /**
  * Use short variable name to speed up FastJson deserialization process.
+ * 发送消息请求头，变量名字变短，使用FastJSON进行序列化的时候速度会更快
  */
 public class SendMessageRequestHeaderV2 implements CommandCustomHeader {
     @CFNotNull

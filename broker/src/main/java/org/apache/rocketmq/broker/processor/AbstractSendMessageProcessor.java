@@ -283,6 +283,12 @@ public abstract class AbstractSendMessageProcessor extends AsyncNettyRequestProc
         }
     }
 
+    /**
+     * 解析发送消息的请求头
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     protected SendMessageRequestHeader parseRequestHeader(RemotingCommand request)
         throws RemotingCommandException {
 
@@ -291,9 +297,11 @@ public abstract class AbstractSendMessageProcessor extends AsyncNettyRequestProc
         switch (request.getCode()) {
             case RequestCode.SEND_BATCH_MESSAGE:
             case RequestCode.SEND_MESSAGE_V2:
+                // 解码发送消息请求头
                 requestHeaderV2 = decodeSendMessageHeaderV2(request);
             case RequestCode.SEND_MESSAGE:
                 if (null == requestHeaderV2) {
+                    // 加码发送消息请求头
                     requestHeader =
                         (SendMessageRequestHeader) request
                             .decodeCommandCustomHeader(SendMessageRequestHeader.class);

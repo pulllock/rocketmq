@@ -48,6 +48,8 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
+ * 对应commitlog文件，用来存储消息
+ *
  * 消息存储格式：
  * 1. TOTALSIZE，该消息条目总长度，4字节
  * 2. MAGICCODE，魔数，4字节，固定值0xdaa320a7
@@ -69,8 +71,6 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
  * 18. Topic，主题，长度为TopicLength中存储的值
  * 19. PropertiesLength，消息属性长度，2字节，消息属性长度不能超过65536个字符
  * 20. Properties，消息属性，长度为PropertiesLength中存储的值
- *
- *
  */
 public class CommitLog {
     // Message's MAGIC CODE daa320a7
