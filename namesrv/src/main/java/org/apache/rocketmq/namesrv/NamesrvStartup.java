@@ -53,6 +53,10 @@ public class NamesrvStartup {
         一个主Broker向所有的NameServer注册后，NameServer会保存Topic对应的队列信息，并返回成功。
         一个从Broker向所有的NameServer注册后，NameServer会保存Topic对应的队列信息，并将对应Master的地址以及Master的BrokerIP2
         配置的地址返回给从Broker，从Broker会通过此地址和Master进行同步。
+
+        NameServer会定时扫描不活跃的Broker，Broker的存活信息在brokerLiveTable缓存中，在Broker注册或者发送心跳包的时候，
+        都会更新brokerLiveTable中的Broker的信息。定时任务扫描这个缓存表中每个Broker信息，根据时间戳判断如果超过了一定时间
+        还没有更新Broker信息，说明Broker已经不活跃了，需要从各种缓存中移除Broker信息以及对应的Topic信息。
      */
 
     private static InternalLogger log;

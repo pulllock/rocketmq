@@ -21,9 +21,20 @@ import org.apache.rocketmq.remoting.CommandCustomHeader;
 import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
+/**
+ * 获取KV配置请求头
+ */
 public class GetKVConfigRequestHeader implements CommandCustomHeader {
+
+    /**
+     * key所在的命名空间
+     */
     @CFNotNull
     private String namespace;
+
+    /**
+     * key
+     */
     @CFNotNull
     private String key;
 

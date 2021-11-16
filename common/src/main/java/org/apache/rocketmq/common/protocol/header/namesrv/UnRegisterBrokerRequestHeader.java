@@ -24,13 +24,32 @@ import org.apache.rocketmq.remoting.CommandCustomHeader;
 import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
+/**
+ * 注销Broker的请求头
+ */
 public class UnRegisterBrokerRequestHeader implements CommandCustomHeader {
+
+    /**
+     * 要注销的Broker的名字
+     */
     @CFNotNull
     private String brokerName;
+
+    /**
+     * 要注销的Broker的地址
+     */
     @CFNotNull
     private String brokerAddr;
+
+    /**
+     * 要注销的Broker的所属的集群的名字
+     */
     @CFNotNull
     private String clusterName;
+
+    /**
+     * 要注销的Broker的ID
+     */
     @CFNotNull
     private Long brokerId;
 

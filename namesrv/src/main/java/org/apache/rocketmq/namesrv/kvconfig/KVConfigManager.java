@@ -34,6 +34,10 @@ public class KVConfigManager {
     private final NamesrvController namesrvController;
 
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
+    /**
+     * KV配置表
+     */
     private final HashMap<String/* Namespace */, HashMap<String/* Key */, String/* Value */>> configTable =
         new HashMap<String, HashMap<String, String>>();
 
@@ -58,10 +62,18 @@ public class KVConfigManager {
         }
     }
 
+    /**
+     * 设置KV配置
+     * @param namespace
+     * @param key
+     * @param value
+     */
     public void putKVConfig(final String namespace, final String key, final String value) {
         try {
+            // 写锁
             this.lock.writeLock().lockInterruptibly();
             try {
+                // 从kv配置表缓存中获取namespace下的所有KV配置
                 HashMap<String, String> kvTable = this.configTable.get(namespace);
                 if (null == kvTable) {
                     kvTable = new HashMap<String, String>();
@@ -69,6 +81,7 @@ public class KVConfigManager {
                     log.info("putKVConfig create new Namespace {}", namespace);
                 }
 
+                // 设置KV配置
                 final String prev = kvTable.put(key, value);
                 if (null != prev) {
                     log.info("putKVConfig update config item, Namespace: {} Key: {} Value: {}",
@@ -78,12 +91,14 @@ public class KVConfigManager {
                         namespace, key, value);
                 }
             } finally {
+                // 解锁
                 this.lock.writeLock().unlock();
             }
         } catch (InterruptedException e) {
             log.error("putKVConfig InterruptedException", e);
         }
 
+        // 持久化KV配置到硬盘上
         this.persist();
     }
 
@@ -91,11 +106,14 @@ public class KVConfigManager {
         try {
             this.lock.readLock().lockInterruptibly();
             try {
+                // 使用KVConfigSerializeWrapper包装KV配置
                 KVConfigSerializeWrapper kvConfigSerializeWrapper = new KVConfigSerializeWrapper();
                 kvConfigSerializeWrapper.setConfigTable(this.configTable);
 
+                // 转成JSON字符串
                 String content = kvConfigSerializeWrapper.toJson();
 
+                // 写到硬盘上
                 if (null != content) {
                     MixAll.string2File(content, this.namesrvController.getNamesrvConfig().getKvConfigPath());
                 }
@@ -111,10 +129,17 @@ public class KVConfigManager {
 
     }
 
+    /**
+     * 删除KV配置
+     * @param namespace
+     * @param key
+     */
     public void deleteKVConfig(final String namespace, final String key) {
         try {
+            // 写锁
             this.lock.writeLock().lockInterruptibly();
             try {
+                // 从KV配置表中移除
                 HashMap<String, String> kvTable = this.configTable.get(namespace);
                 if (null != kvTable) {
                     String value = kvTable.remove(key);
@@ -128,6 +153,7 @@ public class KVConfigManager {
             log.error("deleteKVConfig InterruptedException", e);
         }
 
+        // 缓存到硬盘
         this.persist();
     }
 
@@ -151,10 +177,18 @@ public class KVConfigManager {
         return null;
     }
 
+    /**
+     * 获取KV配置
+     * @param namespace
+     * @param key
+     * @return
+     */
     public String getKVConfig(final String namespace, final String key) {
         try {
+            // 读锁
             this.lock.readLock().lockInterruptibly();
             try {
+                // 从KV配置缓存中获取
                 HashMap<String, String> kvTable = this.configTable.get(namespace);
                 if (null != kvTable) {
                     return kvTable.get(key);

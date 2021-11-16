@@ -59,6 +59,10 @@ public class NamesrvController {
      */
     private RemotingServer remotingServer;
 
+    /**
+     * 主要处理一些Broker的连接发生变化后的处理，比如Broker连接关闭或者异常后，
+     * 这个Broker就变得不可用了，需要将Broker从缓存中移除掉
+     */
     private BrokerHousekeepingService brokerHousekeepingService;
 
     /**

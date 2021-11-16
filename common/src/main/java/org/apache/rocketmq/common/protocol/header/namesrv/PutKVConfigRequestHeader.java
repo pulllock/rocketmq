@@ -21,11 +21,26 @@ import org.apache.rocketmq.remoting.CommandCustomHeader;
 import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
+/**
+ * 设置KV配置的请求头
+ */
 public class PutKVConfigRequestHeader implements CommandCustomHeader {
+
+    /**
+     * 命名空间
+     */
     @CFNotNull
     private String namespace;
+
+    /**
+     * key
+     */
     @CFNotNull
     private String key;
+
+    /**
+     * value
+     */
     @CFNotNull
     private String value;
 

@@ -93,6 +93,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
     /**
      * Channel事件监听器
+     * 比如NameServer的BrokerHouseKeepingServer，主要是处理一些Broker的连接发生变化后的处理，比如Broker连接关闭或者异常后
+     * 这个Broker就变得不可用了，需要将Broker从NameServer相关的缓存中移除掉。
      */
     private final ChannelEventListener channelEventListener;
 

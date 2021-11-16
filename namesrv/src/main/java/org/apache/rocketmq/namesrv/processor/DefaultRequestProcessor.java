@@ -156,17 +156,29 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         return false;
     }
 
+    /**
+     * 设置KV配置，并持久化到硬盘上
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     public RemotingCommand putKVConfig(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
+        // 创建响应命令
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 解码请求头
         final PutKVConfigRequestHeader requestHeader =
             (PutKVConfigRequestHeader) request.decodeCommandCustomHeader(PutKVConfigRequestHeader.class);
 
+        // namespace和key不能为null
         if (requestHeader.getNamespace() == null || requestHeader.getKey() == null) {
             response.setCode(ResponseCode.SYSTEM_ERROR);
             response.setRemark("namespace or key is null");
             return response;
         }
+
+        // 设置kv配置
         this.namesrvController.getKvConfigManager().putKVConfig(
             requestHeader.getNamespace(),
             requestHeader.getKey(),
@@ -178,13 +190,23 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         return response;
     }
 
+    /**
+     * 获取KV配置
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     public RemotingCommand getKVConfig(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
+        // 创建响应命令
         final RemotingCommand response = RemotingCommand.createResponseCommand(GetKVConfigResponseHeader.class);
         final GetKVConfigResponseHeader responseHeader = (GetKVConfigResponseHeader) response.readCustomHeader();
+        // 解码请求头
         final GetKVConfigRequestHeader requestHeader =
             (GetKVConfigRequestHeader) request.decodeCommandCustomHeader(GetKVConfigRequestHeader.class);
 
+        // 获取KV配置
         String value = this.namesrvController.getKvConfigManager().getKVConfig(
             requestHeader.getNamespace(),
             requestHeader.getKey()
@@ -202,12 +224,22 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         return response;
     }
 
+    /**
+     * 删除KV配置，并持久化到硬盘
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     public RemotingCommand deleteKVConfig(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
+        // 创建响应命令
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 解码请求头
         final DeleteKVConfigRequestHeader requestHeader =
             (DeleteKVConfigRequestHeader) request.decodeCommandCustomHeader(DeleteKVConfigRequestHeader.class);
 
+        // 删除KV配置
         this.namesrvController.getKvConfigManager().deleteKVConfig(
             requestHeader.getNamespace(),
             requestHeader.getKey()
@@ -384,12 +416,22 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         return response;
     }
 
+    /**
+     * 注销Broker
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     public RemotingCommand unregisterBroker(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
+        // 创建响应命令
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 解码请求头
         final UnRegisterBrokerRequestHeader requestHeader =
             (UnRegisterBrokerRequestHeader) request.decodeCommandCustomHeader(UnRegisterBrokerRequestHeader.class);
 
+        // 注销Broker
         this.namesrvController.getRouteInfoManager().unregisterBroker(
             requestHeader.getClusterName(),
             requestHeader.getBrokerAddr(),
