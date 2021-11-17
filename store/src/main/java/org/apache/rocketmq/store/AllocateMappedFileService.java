@@ -33,12 +33,15 @@ import org.apache.rocketmq.store.config.BrokerRole;
 
 /**
  * Create MappedFile in advance
+ * MappedFile文件分配服务
  */
 public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static int waitTimeOut = 1000 * 5;
     private ConcurrentMap<String, AllocateRequest> requestTable =
         new ConcurrentHashMap<String, AllocateRequest>();
+
+    // 存放分配MappedFile请求的队列
     private PriorityBlockingQueue<AllocateRequest> requestQueue =
         new PriorityBlockingQueue<AllocateRequest>();
     private volatile boolean hasException = false;
@@ -132,6 +135,9 @@ public class AllocateMappedFileService extends ServiceThread {
         }
     }
 
+    /**
+     * 在DefaultMessageStore实例化的时候，会启动分配MappedFile文件的线程
+     */
     public void run() {
         log.info(this.getServiceName() + " service started");
 
@@ -148,6 +154,7 @@ public class AllocateMappedFileService extends ServiceThread {
         boolean isSuccess = false;
         AllocateRequest req = null;
         try {
+            // 从请求队列中获取一个分配MappedFile的请求，如果获取不到会阻塞在这里
             req = this.requestQueue.take();
             AllocateRequest expectedRequest = this.requestTable.get(req.getFilePath());
             if (null == expectedRequest) {

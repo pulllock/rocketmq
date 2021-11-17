@@ -328,6 +328,10 @@ public class MappedFile extends ReferenceResource {
         return new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR);
     }
 
+    /**
+     * 获取文件的起始偏移量
+     * @return
+     */
     public long getFileFromOffset() {
         return this.fileFromOffset;
     }

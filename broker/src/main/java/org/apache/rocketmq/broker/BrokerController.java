@@ -533,7 +533,7 @@ public class BrokerController {
             }
         }
 
-        // 消息存储服务加载之前的存储相关的配置等
+        // 消息存储服务加载之前的存储相关的配置等；加载CommitLog文件、加载消费队列、加载延迟消息消费队列进度等等
         result = result && this.messageStore.load();
 
         if (result) {

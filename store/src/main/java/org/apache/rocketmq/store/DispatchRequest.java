@@ -18,6 +18,9 @@ package org.apache.rocketmq.store;
 
 import java.util.Map;
 
+/**
+ * 分发消息的请求
+ */
 public class DispatchRequest {
 
     /**

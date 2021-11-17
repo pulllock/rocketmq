@@ -92,7 +92,7 @@ public class CommitLog {
     protected final MappedFileQueue mappedFileQueue;
 
     /**
-     * 默认消息存储服务
+     * 默认消息存储服务commitLog
      */
     protected final DefaultMessageStore defaultMessageStore;
 
@@ -225,6 +225,7 @@ public class CommitLog {
 
     /**
      * Read CommitLog data, use data replication
+     * 从CommitLog文件中读取指定offset后面的数据
      */
     public SelectMappedBufferResult getData(final long offset) {
         return this.getData(offset, offset == 0);
@@ -238,7 +239,7 @@ public class CommitLog {
         if (mappedFile != null) {
             // 得到MappedByteBuffer对应的position
             int pos = (int) (offset % mappedFileSize);
-            // sliceMappedByteBuffer的一部分返回
+            // slice MappedByteBuffer的一部分返回
             SelectMappedBufferResult result = mappedFile.selectMappedBuffer(pos);
             return result;
         }
@@ -995,8 +996,12 @@ public class CommitLog {
         return -1;
     }
 
+    /**
+     * 获取CommitLog文件的最小偏移量
+     * @return
+     */
     public long getMinOffset() {
-        // 回去目录下的第一个文件
+        // 获取目录下的第一个CommitLog文件
         MappedFile mappedFile = this.mappedFileQueue.getFirstMappedFile();
         // 文件存在
         if (mappedFile != null) {

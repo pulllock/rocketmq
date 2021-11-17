@@ -393,6 +393,10 @@ public class ConsumeQueue {
         return this.minLogicOffset / CQ_STORE_UNIT_SIZE;
     }
 
+    /**
+     * 将消息的信息放到ConsumeQueue中去
+     * @param request
+     */
     public void putMessagePositionInfoWrapper(DispatchRequest request) {
         final int maxRetries = 30;
         // ConsumeQueue是否可写
