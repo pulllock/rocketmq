@@ -25,6 +25,10 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.BrokerRole;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * 管理consume queue文件，消息消费队列，是一个大文件。
+ * 保存了指定Topic下的消息在CommitLog文件中的起始物理偏移量、消息大小、消息Tag的哈希值。
+ */
 public class ConsumeQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 

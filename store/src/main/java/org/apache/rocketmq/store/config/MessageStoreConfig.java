@@ -66,7 +66,7 @@ public class MessageStoreConfig {
 
     /**
      * introduced since 4.0.x. Determine whether to use mutex reentrantLock when putting message.<br/>
-     * 在put message将消息格式封装成msg放入到相关队列时使用的锁机制：自旋或ReentrantLock
+     * 存储消息的时候可以选择使用可重入锁或者是自旋锁
      */
     private boolean useReentrantLockWhenPutMessage = true;
 
@@ -641,6 +641,7 @@ public class MessageStoreConfig {
      * Enable transient commitLog store pool only if transientStorePoolEnable is true and the FlushDiskType is
      * ASYNC_FLUSH
      *
+     * 是否开启临时存储池：transientStorePoolEnable=true并且是异步刷盘并且当前Broker是主节点
      * @return <tt>true</tt> or <tt>false</tt>
      */
     public boolean isTransientStorePoolEnable() {

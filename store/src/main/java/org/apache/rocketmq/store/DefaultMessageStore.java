@@ -203,7 +203,9 @@ public class DefaultMessageStore implements MessageStore {
 
         this.transientStorePool = new TransientStorePool(messageStoreConfig);
 
+        // 如果开启了临时存储池：transientStorePoolEnable=true并且是异步刷盘并且当前Broker是主节点
         if (messageStoreConfig.isTransientStorePoolEnable()) {
+            // 初始化临时存储池，会申请堆外内存、使用系统调用mlock锁定内存，防止调度到交换空间
             this.transientStorePool.init();
         }
 
@@ -480,6 +482,11 @@ public class DefaultMessageStore implements MessageStore {
         return PutMessageStatus.PUT_OK;
     }
 
+    /**
+     * 异步存储消息
+     * @param msg MessageInstance to store
+     * @return
+     */
     @Override
     public CompletableFuture<PutMessageResult> asyncPutMessage(MessageExtBrokerInner msg) {
         PutMessageStatus checkStoreStatus = this.checkStoreStatus();
@@ -493,6 +500,7 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         long beginTime = this.getSystemClock().now();
+        // 异步存储消息
         CompletableFuture<PutMessageResult> putResultFuture = this.commitLog.asyncPutMessage(msg);
 
         putResultFuture.thenAccept((result) -> {

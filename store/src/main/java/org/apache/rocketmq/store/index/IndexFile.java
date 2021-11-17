@@ -28,6 +28,9 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.MappedFile;
 
 /**
+ * Index索引文件，是一个大文件。
+ * 可根据key或者时间区间来查询消息，文件名是以创建的时间戳命名。
+ *
  * Hash槽，一个IndexFile中包含500万个Hash槽，每个Hash槽存储的是落在该Hash槽的hashcode最新的Index的索引
  *
  * Index条目列表，默认一个索引文件包含2000万个条目，每个Index条目结构如下：

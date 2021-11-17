@@ -43,7 +43,7 @@ import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
 /**
- * 对于commitlog、consumequeue、index三大类文件进行磁盘读写操作，均是通过MappedFile文件完成
+ * 对于commitlog、consumequeue、index三种大文件进行磁盘读写操作，均是通过MappedFile文件完成
  */
 public class MappedFile extends ReferenceResource {
 
@@ -64,7 +64,7 @@ public class MappedFile extends ReferenceResource {
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
 
     /**
-     * 当前该文件写指针，从0开始，当wrotePosition == fileSize时代表文件写满了
+     * 当前该文件写指针，表示写入的位置，从0开始，当wrotePosition == fileSize时代表文件写满了
      */
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
 
@@ -80,23 +80,23 @@ public class MappedFile extends ReferenceResource {
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
 
     /**
-     * 文件大小，默认1G
+     * MappedFile文件大小，默认1G
      */
     protected int fileSize;
 
     /**
-     * 文件通道
+     * 文件通道，创建文件的内存映射
      */
     protected FileChannel fileChannel;
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
-     * 堆内存ByteBuffer，如果不为空，数据首先将存储在该Buffer中，然后提交到MappedFile对应的内存文件Buffer
-     * transientStorePoolEnable为true时不为空
+     * transientStorePoolEnable为true的时候，使用ByteBuffer.allocateDirect来创建，内存是堆外内存；
+     * 如果为false，则writeBuffer始终为null。
      */
     protected ByteBuffer writeBuffer = null;
 
     /**
-     * 堆内存池，transientStorePoolEnable为true时使用
+     * 临时存储池，transientStorePoolEnable为true时使用
      */
     protected TransientStorePool transientStorePool = null;
 
@@ -116,7 +116,7 @@ public class MappedFile extends ReferenceResource {
     private File file;
 
     /**
-     * 物理文件对应的内存映射Buffer
+     * 物理文件对应的内存映射，使用FileChannel.map创建
      */
     private MappedByteBuffer mappedByteBuffer;
 
@@ -133,10 +133,24 @@ public class MappedFile extends ReferenceResource {
     public MappedFile() {
     }
 
+    /**
+     * 实例化MappedFile的时候会直接进行初始化，创建对应文件以及内存映射对象
+     * @param fileName
+     * @param fileSize
+     * @throws IOException
+     */
     public MappedFile(final String fileName, final int fileSize) throws IOException {
+        // 初始化，创建对应文件以及内存映射对象
         init(fileName, fileSize);
     }
 
+    /**
+     * 实例化MappedFile的时候会直接进行初始化，创建对应文件以及内存映射对象，这个是从临时内存池中获取内存
+     * @param fileName
+     * @param fileSize
+     * @param transientStorePool
+     * @throws IOException
+     */
     public MappedFile(final String fileName, final int fileSize,
         final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize, transientStorePool);
@@ -206,16 +220,32 @@ public class MappedFile extends ReferenceResource {
         return TOTAL_MAPPED_VIRTUAL_MEMORY.get();
     }
 
+    /**
+     * 初始化MappedFile，创建对应文件以及内存映射对象，这个是从临时内存池中获取内存
+     * @param fileName
+     * @param fileSize
+     * @param transientStorePool
+     * @throws IOException
+     */
     public void init(final String fileName, final int fileSize,
         final TransientStorePool transientStorePool) throws IOException {
+        // 初始化
         init(fileName, fileSize);
+        // 从临时内存池中获取内存
         this.writeBuffer = transientStorePool.borrowBuffer();
         this.transientStorePool = transientStorePool;
     }
 
+    /**
+     * 初始化MappedFile，创建对应文件以及内存映射对象
+     * @param fileName
+     * @param fileSize
+     * @throws IOException
+     */
     private void init(final String fileName, final int fileSize) throws IOException {
         this.fileName = fileName;
         this.fileSize = fileSize;
+        // 创建文件
         this.file = new File(fileName);
         // 起始偏移量fileFromOffset初始为文件名
         this.fileFromOffset = Long.parseLong(this.file.getName());
@@ -224,9 +254,13 @@ public class MappedFile extends ReferenceResource {
         ensureDirOK(this.file.getParent());
 
         try {
+            // 创建随机访问文件的FileChannel
             this.fileChannel = new RandomAccessFile(this.file, "rw").getChannel();
+            // 创建内存映射
             this.mappedByteBuffer = this.fileChannel.map(MapMode.READ_WRITE, 0, fileSize);
+            // MappedFile映射内存总大小增加
             TOTAL_MAPPED_VIRTUAL_MEMORY.addAndGet(fileSize);
+            // MappedFile文件个数增加
             TOTAL_MAPPED_FILES.incrementAndGet();
             ok = true;
         } catch (FileNotFoundException e) {
@@ -339,6 +373,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 将数据从缓冲区刷到磁盘中
      * @return The current flushed position
      */
     public int flush(final int flushLeastPages) {
@@ -354,9 +389,11 @@ public class MappedFile extends ReferenceResource {
 
                 try {
                     //We only append data to fileChannel or mappedByteBuffer, never both.
+                    // writeBuffer不为null，使用的是临时存储池，commit的时候提交到了FileChannel，这里直接刷新到磁盘即可
                     if (writeBuffer != null || this.fileChannel.position() != 0) {
                         this.fileChannel.force(false);
                     } else {
+                        // 使用的内存映射MappedByteBuffer，刷新数据到磁盘
                         this.mappedByteBuffer.force();
                     }
                 } catch (Throwable e) {
@@ -374,16 +411,26 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 将数据从堆外内存commit到FileChannel中。
      *
+     * 在开启了临时存储池的时候会使用，开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），
+     * 也就是写入PageCache，之后再刷（flush）到磁盘上。
      * @param commitLeastPages 本次提交最小的页数，如果待提交数据不满commitLeastPages，则不执行本次提交操作
      * @return
      */
     public int commit(final int commitLeastPages) {
-        // writeBuffer为空，直接返回wrotePosition指针，表明commit操作主体是writeBuffer
+        /*
+            writeBuffer为null，说明没有使用临时存储池，而是使用的直接内存映射的方式，也就是MappedByteBuffer。
+            使用直接内存映射的方式已经将数据写入FileChannel中了，不需要提交的时候再写入FileChannel了。
+         */
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();
         }
+
+        /*
+            writeBuffer不为空，说明使用的是临时存储池，临时内存池使用的是堆外内存，这种方式提交需要写到FileChannel中。
+         */
         if (this.isAbleToCommit(commitLeastPages)) {
             if (this.hold()) {
                 commit0();

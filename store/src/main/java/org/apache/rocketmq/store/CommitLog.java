@@ -48,7 +48,7 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
- * 对应commitlog文件，用来存储消息
+ * 对应commitlog文件，用来存储消息，是一个大文件。
  *
  * 消息存储格式：
  * 1. TOTALSIZE，该消息条目总长度，4字节
@@ -74,46 +74,102 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
  */
 public class CommitLog {
     // Message's MAGIC CODE daa320a7
+    /**
+     * 魔数
+     */
     public final static int MESSAGE_MAGIC_CODE = -626843481;
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     // End of file empty MAGIC CODE cbd43194
+
+    /**
+     * 空消息的魔数
+     */
     protected final static int BLANK_MAGIC_CODE = -875286124;
+
+    /**
+     * MappedFile文件列表，持有所有的MappedFile
+     */
     protected final MappedFileQueue mappedFileQueue;
+
+    /**
+     * 默认消息存储服务
+     */
     protected final DefaultMessageStore defaultMessageStore;
+
+    /**
+     * 消息刷盘服务
+     * MappedFile落盘有两种方式：
+     * 1. 开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），也就是写入PageCache，之后再刷（flush）到磁盘上。
+     * 2. 没开启临时存储池，消息会直接写到内存映射区域（MappedByteBuffer），然后再刷（flush）到磁盘上。
+     *
+     * flushCommitLogService不管有没有开启临时存储池，都会被调用，是刷到磁盘上的操作
+     */
     private final FlushCommitLogService flushCommitLogService;
 
     //If TransientStorePool enabled, we must flush message to FileChannel at fixed periods
+    /**
+     * 只有开启了临时存储池的时候，才会使用该服务，将数据从堆外内存提交（commit）到文件通道（FileChannel），
+     * 之后再使用flushCommitLogService进行刷盘操作
+     */
     private final FlushCommitLogService commitLogService;
 
+    /**
+     * 消息追加后的回调函数
+     */
     private final AppendMessageCallback appendMessageCallback;
+
+    /**
+     * 存储消息的本地线程
+     */
     private final ThreadLocal<PutMessageThreadLocal> putMessageThreadLocal;
+
+    /**
+     * 存储Topic所在队列的偏移量
+     */
     protected HashMap<String/* topic-queueid */, Long/* offset */> topicQueueTable = new HashMap<String, Long>(1024);
     protected volatile long confirmOffset = -1L;
 
     private volatile long beginTimeInLock = 0;
 
+    /**
+     * 存储消息使用的锁
+     */
     protected final PutMessageLock putMessageLock;
 
     public CommitLog(final DefaultMessageStore defaultMessageStore) {
+        // MappedFile文件列表，持有所有的MappedFile
         this.mappedFileQueue = new MappedFileQueue(defaultMessageStore.getMessageStoreConfig().getStorePathCommitLog(),
             defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog(), defaultMessageStore.getAllocateMappedFileService());
+
+        // 默认消息存储服务
         this.defaultMessageStore = defaultMessageStore;
 
+        // 同步刷盘
         if (FlushDiskType.SYNC_FLUSH == defaultMessageStore.getMessageStoreConfig().getFlushDiskType()) {
+            // 同步刷盘的消息刷盘服务
             this.flushCommitLogService = new GroupCommitService();
-        } else {
+        }
+        // 消息异步刷盘
+        else {
+            // 异步刷盘的消息刷盘服务
             this.flushCommitLogService = new FlushRealTimeService();
         }
 
+        // 只有开启了临时存储池的时候，才会使用该服务，将数据从堆外内存提交（commit）到文件通道（FileChannel）
         this.commitLogService = new CommitRealTimeService();
 
+        // 消息追加后的回调函数
         this.appendMessageCallback = new DefaultAppendMessageCallback(defaultMessageStore.getMessageStoreConfig().getMaxMessageSize());
+
+        // 存储消息的本地线程
         putMessageThreadLocal = new ThreadLocal<PutMessageThreadLocal>() {
             @Override
             protected PutMessageThreadLocal initialValue() {
                 return new PutMessageThreadLocal(defaultMessageStore.getMessageStoreConfig().getMaxMessageSize());
             }
         };
+
+        // 存储消息时用的锁可以是可重入锁，也可以是自旋锁
         this.putMessageLock = defaultMessageStore.getMessageStoreConfig().isUseReentrantLockWhenPutMessage() ? new PutMessageReentrantLock() : new PutMessageSpinLock();
 
     }
@@ -591,6 +647,11 @@ public class CommitLog {
         return keyBuilder.toString();
     }
 
+    /**
+     * 异步存储消息
+     * @param msg
+     * @return
+     */
     public CompletableFuture<PutMessageResult> asyncPutMessage(final MessageExtBrokerInner msg) {
         // Set the storage time
         msg.setStoreTimestamp(System.currentTimeMillis());
@@ -1043,19 +1104,21 @@ public class CommitLog {
     }
 
     /**
+     * 消息刷盘服务
      * MappedFile落盘有两种方式：
-     * 1. 写入内存字节缓冲区（writeBuffer）
-     *          -> 从内存字节缓冲区（writeBuffer）提交（commit）到文件通道（fileChannel）
-     *                  ->文件通道flush
-     * 2. 写入映射文件字节缓冲区（mappedByteBuffer）—> 映射文件字节缓冲区flush
+     * 1. 开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），也就是写入PageCache，之后再刷（flush）到磁盘上。
+     * 2. 没开启临时存储池，消息会直接写到内存映射区域（MappedByteBuffer），然后再刷（flush）到磁盘上。
      */
     abstract class FlushCommitLogService extends ServiceThread {
         protected static final int RETRY_TIMES_OVER = 10;
     }
 
     /**
-     * 消息插入成功时，异步刷盘时使用，和FlushRealTimeService类似，对应commit操作
-     * 异步刷盘，并且开启内存字节缓冲区，性能最好
+     * 消息提交服务
+     * 在开启了临时存储池的时候会使用，开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），
+     * 也就是写入PageCache，之后再刷（flush）到磁盘上。
+     *
+     * CommitRealTimeService就是commit这一步
      */
     class CommitRealTimeService extends FlushCommitLogService {
 
@@ -1084,6 +1147,7 @@ public class CommitLog {
                 }
 
                 try {
+                    // 将数据从堆外内存commit到FileChannel中
                     boolean result = CommitLog.this.mappedFileQueue.commit(commitDataLeastPages);
                     long end = System.currentTimeMillis();
                     if (!result) {
@@ -1111,8 +1175,7 @@ public class CommitLog {
     }
 
     /**
-     * 消息插入成功时，异步刷盘时使用，对应于flush操作
-     * 异步刷盘，关闭内存字节缓冲区，性能第二
+     * 异步刷盘服务
      */
     class FlushRealTimeService extends FlushCommitLogService {
         /**
@@ -1232,7 +1295,7 @@ public class CommitLog {
 
     /**
      * GroupCommit Service
-     * 同步刷盘，性能最差
+     * 同步刷盘服务
      */
     class GroupCommitService extends FlushCommitLogService {
         // 写入请求队列
