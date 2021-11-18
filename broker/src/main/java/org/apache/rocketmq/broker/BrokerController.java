@@ -1175,7 +1175,14 @@ public class BrokerController {
     }
 
     public void start() throws Exception {
-        // 启动消息存储服务
+        /*
+           启动消息存储服务：
+           - 开启CommitLog消息分发服务，根据CommitLog文件构建ConsumeQueue、IndexFile文件
+           - 开启消息队列文件ConsumeQueue刷盘服务
+           - 开启消息刷盘服务、如果开启了临时存储池，需要开启消息commit服务
+           - 开启存储状态服务
+           - 添加开启一些周期性的任务
+         */
         if (this.messageStore != null) {
             this.messageStore.start();
         }

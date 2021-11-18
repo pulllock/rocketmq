@@ -54,6 +54,9 @@ public class BrokerFastFailure {
         return null;
     }
 
+    /**
+     * 定期性的执行Broker快速失败服务，定时处理长时间未执行的客户端请求
+     */
     public void start() {
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override

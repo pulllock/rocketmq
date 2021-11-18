@@ -76,7 +76,7 @@ public class BrokerStartup {
     public static BrokerController start(BrokerController controller) {
         try {
 
-            // 启动
+            // 启动Broker使用到的各个组件
             controller.start();
 
             String tip = "The broker[" + controller.getBrokerConfig().getBrokerName() + ", "

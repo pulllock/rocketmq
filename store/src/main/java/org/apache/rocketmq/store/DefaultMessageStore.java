@@ -89,7 +89,7 @@ public class DefaultMessageStore implements MessageStore {
     private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
 
     /**
-     * 消息队列文件ConsumeQueue刷盘线程
+     * 消息队列文件ConsumeQueue刷盘服务
      */
     private final FlushConsumeQueueService flushConsumeQueueService;
 
@@ -323,7 +323,12 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-     * 启动消息存储服务
+     * 启动消息存储服务：
+     * - 开启CommitLog消息分发服务，根据CommitLog文件构建ConsumeQueue、IndexFile文件
+     * - 开启消息队列文件ConsumeQueue刷盘服务
+     * - 开启消息刷盘服务、如果开启了临时存储池，需要开启消息commit服务
+     * - 开启存储状态服务
+     * - 添加开启一些周期性的任务
      * @throws Exception
      */
     public void start() throws Exception {
@@ -408,11 +413,18 @@ public class DefaultMessageStore implements MessageStore {
             this.handleScheduleMessageService(messageStoreConfig.getBrokerRole());
         }
 
+        // 开启消息队列文件ConsumeQueue刷盘服务
         this.flushConsumeQueueService.start();
+
+        // 开启消息刷盘服务、如果开启了临时存储池，需要开启消息commit服务
         this.commitLog.start();
+
+        // 开启存储状态服务
         this.storeStatsService.start();
 
         this.createTempFile();
+
+        // 添加一些周期性的任务
         this.addScheduleTask();
         this.shutdown = false;
     }
@@ -1363,8 +1375,14 @@ public class DefaultMessageStore implements MessageStore {
         return null;
     }
 
+    /**
+     * 根据Topic与队列id从consumeQueueTable缓存中获取对应的ConsumeQueue文件
+     * @param topic
+     * @param queueId
+     * @return
+     */
     public ConsumeQueue findConsumeQueue(String topic, int queueId) {
-        // 根据topic获取对应的消费队列目录
+        // 根据Topic获取该Topic下的队列
         ConcurrentMap<Integer, ConsumeQueue> map = consumeQueueTable.get(topic);
         if (null == map) {
             ConcurrentMap<Integer, ConsumeQueue> newMap = new ConcurrentHashMap<Integer, ConsumeQueue>(128);
@@ -1459,8 +1477,20 @@ public class DefaultMessageStore implements MessageStore {
         log.info(fileName + (result ? " create OK" : " already exists"));
     }
 
+    /**
+     * 添加一些周期性的任务
+     * - 清除CommitLog文件服务
+     * - 清除ConsumeQueue文件服务
+     * - 周期性的检查MappedFile文件是否完整
+     * - 周期性的检查硬盘是否足够
+     */
     private void addScheduleTask() {
 
+        /*
+            启动周期性的清理服务：
+            - 清除CommitLog文件服务
+            - 清除ConsumeQueue文件服务
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -1468,6 +1498,7 @@ public class DefaultMessageStore implements MessageStore {
             }
         }, 1000 * 60, this.messageStoreConfig.getCleanResourceInterval(), TimeUnit.MILLISECONDS);
 
+        // 启动周期性的检查MappedFile文件是否完整
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -1502,6 +1533,7 @@ public class DefaultMessageStore implements MessageStore {
         // DefaultMessageStore.this.cleanExpiredConsumerQueue();
         // }
         // }, 1, 1, TimeUnit.HOURS);
+        // 周期性的检查硬盘是否足够
         this.diskCheckScheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             public void run() {
                 DefaultMessageStore.this.cleanCommitLogService.isSpaceFull();
@@ -1509,6 +1541,11 @@ public class DefaultMessageStore implements MessageStore {
         }, 1000L, 10000L, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 启动周期性的清理任务：
+     * - 清除CommitLog文件服务
+     * - 清除ConsumeQueue文件服务
+     */
     private void cleanFilesPeriodically() {
         this.cleanCommitLogService.run();
         this.cleanConsumeQueueService.run();
@@ -1673,11 +1710,11 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-     * 将消息的信息放到ConsumeQueue中去
+     * 将CommitLog消息放到ConsumeQueue中去
      * @param dispatchRequest
      */
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
-        // 根据消息主题与队列id从consumeQueueTable缓存中获取对应的ConsumeQueue文件
+        // 根据Topic与队列id从consumeQueueTable缓存中获取对应的ConsumeQueue文件
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
 
         // 构建ConsumeQueue
@@ -1734,7 +1771,7 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-     * 使用CommitLog文件中的内容构建ConsumerQueue
+     * 使用CommitLog文件中的内容构建ConsumeQueue
      */
     class CommitLogDispatcherBuildConsumeQueue implements CommitLogDispatcher {
 

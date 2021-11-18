@@ -92,6 +92,14 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         return false;
     }
 
+    /**
+     * 处理消息拉取请求
+     * @param channel
+     * @param request
+     * @param brokerAllowSuspend
+     * @return
+     * @throws RemotingCommandException
+     */
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request, boolean brokerAllowSuspend)
         throws RemotingCommandException {
         RemotingCommand response = RemotingCommand.createResponseCommand(PullMessageResponseHeader.class);
@@ -594,18 +602,26 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         }
     }
 
+    /**
+     * 将拉消息的请求提交到拉取消息的线程池中
+     * @param channel
+     * @param request
+     * @throws RemotingCommandException
+     */
     public void executeRequestWhenWakeup(final Channel channel,
         final RemotingCommand request) throws RemotingCommandException {
         Runnable run = new Runnable() {
             @Override
             public void run() {
                 try {
+                    // 处理消息拉取
                     final RemotingCommand response = PullMessageProcessor.this.processRequest(channel, request, false);
 
                     if (response != null) {
                         response.setOpaque(request.getOpaque());
                         response.markResponseType();
                         try {
+                            // 响应
                             channel.writeAndFlush(response).addListener(new ChannelFutureListener() {
                                 @Override
                                 public void operationComplete(ChannelFuture future) throws Exception {
@@ -628,6 +644,8 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                 }
             }
         };
+
+        // 提交到拉取消息的线程池
         this.brokerController.getPullMessageExecutor().submit(new RequestTask(run, channel, request));
     }
 

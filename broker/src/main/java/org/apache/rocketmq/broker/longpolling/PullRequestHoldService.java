@@ -49,6 +49,10 @@ public class PullRequestHoldService extends ServiceThread {
     private static final String TOPIC_QUEUEID_SEPARATOR = "@";
     private final BrokerController brokerController;
     private final SystemClock systemClock = new SystemClock();
+
+    /**
+     * 拉取消息请求的缓存表
+     */
     private ConcurrentMap<String/* topic@queueId */, ManyPullRequest> pullRequestTable =
         new ConcurrentHashMap<String, ManyPullRequest>(1024);
 
@@ -78,18 +82,24 @@ public class PullRequestHoldService extends ServiceThread {
         return sb.toString();
     }
 
+    /**
+     * 开始执行拉取消息请求挂起服务
+     */
     @Override
     public void run() {
         log.info("{} service started", this.getServiceName());
         while (!this.isStopped()) {
             try {
+                // 长轮询
                 if (this.brokerController.getBrokerConfig().isLongPollingEnable()) {
                     this.waitForRunning(5 * 1000);
                 } else {
+                    // 短轮询
                     this.waitForRunning(this.brokerController.getBrokerConfig().getShortPollingTimeMills());
                 }
 
                 long beginLockTimestamp = this.systemClock.now();
+                // 查看有没有挂起的请求，有的话就让这些挂起的请求尝试去执行消息拉取
                 this.checkHoldRequest();
                 long costTime = this.systemClock.now() - beginLockTimestamp;
                 if (costTime > 5 * 1000) {
@@ -109,6 +119,7 @@ public class PullRequestHoldService extends ServiceThread {
     }
 
     private void checkHoldRequest() {
+        // 遍历拉取消息请求缓存，挨个让拉取请求去拉取消息
         for (String key : this.pullRequestTable.keySet()) {
             String[] kArray = key.split(TOPIC_QUEUEID_SEPARATOR);
             if (2 == kArray.length) {
@@ -116,6 +127,7 @@ public class PullRequestHoldService extends ServiceThread {
                 int queueId = Integer.parseInt(kArray[1]);
                 final long offset = this.brokerController.getMessageStore().getMaxOffsetInQueue(topic, queueId);
                 try {
+                    // 将拉取消息请求提交到拉取消息线程池中，尝试去拉取消息
                     this.notifyMessageArriving(topic, queueId, offset);
                 } catch (Throwable e) {
                     log.error("check hold request failed. topic={}, queueId={}", topic, queueId, e);
@@ -128,9 +140,21 @@ public class PullRequestHoldService extends ServiceThread {
         notifyMessageArriving(topic, queueId, maxOffset, null, 0, null, null);
     }
 
+    /**
+     * 有新消息到达
+     * @param topic
+     * @param queueId
+     * @param maxOffset
+     * @param tagsCode
+     * @param msgStoreTime
+     * @param filterBitMap
+     * @param properties
+     */
     public void notifyMessageArriving(final String topic, final int queueId, final long maxOffset, final Long tagsCode,
         long msgStoreTime, byte[] filterBitMap, Map<String, String> properties) {
+        // key的格式：Topic@QueueId
         String key = this.buildKey(topic, queueId);
+        // 从拉取请求缓冲中查看当前Topic下的某个ID的队列是不是有消费者来拉消息
         ManyPullRequest mpr = this.pullRequestTable.get(key);
         if (mpr != null) {
             List<PullRequest> requestList = mpr.cloneListAndClear();
@@ -153,6 +177,7 @@ public class PullRequestHoldService extends ServiceThread {
 
                         if (match) {
                             try {
+                                // 将拉取请求提交到拉取消息线程池中，等待执行拉取消息
                                 this.brokerController.getPullMessageProcessor().executeRequestWhenWakeup(request.getClientChannel(),
                                     request.getRequestCommand());
                             } catch (Throwable e) {
@@ -164,6 +189,7 @@ public class PullRequestHoldService extends ServiceThread {
 
                     if (System.currentTimeMillis() >= (request.getSuspendTimestamp() + request.getTimeoutMillis())) {
                         try {
+                            // 将拉取请求提交到拉取消息线程池中，等待执行拉取消息
                             this.brokerController.getPullMessageProcessor().executeRequestWhenWakeup(request.getClientChannel(),
                                 request.getRequestCommand());
                         } catch (Throwable e) {

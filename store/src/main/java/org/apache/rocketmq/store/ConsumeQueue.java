@@ -448,6 +448,14 @@ public class ConsumeQueue {
         this.defaultMessageStore.getRunningFlags().makeLogicsQueueError();
     }
 
+    /**
+     * 将消息放入ConsumeQueue
+     * @param offset
+     * @param size
+     * @param tagsCode
+     * @param cqOffset
+     * @return
+     */
     private boolean putMessagePositionInfo(final long offset, final int size, final long tagsCode,
         final long cqOffset) {
 
@@ -458,16 +466,17 @@ public class ConsumeQueue {
 
         // 依次将消息偏移量、消息长度、tag hashCode写入到ByteBuffer中
         this.byteBufferIndex.flip();
+        // ConsumeQueue每个条目的大小，固定20字节
         this.byteBufferIndex.limit(CQ_STORE_UNIT_SIZE);
         this.byteBufferIndex.putLong(offset);
         this.byteBufferIndex.putInt(size);
         this.byteBufferIndex.putLong(tagsCode);
 
 
-        // 计算ConsumeQueue中的物理地址
+        // 计算ConsumeQueue新增消息后的偏移量
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
 
-        // 根据计算出来的物理地址获取内存映射文件
+        // 根据计算出来的偏移量到获取内存映射文件
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
 

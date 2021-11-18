@@ -336,12 +336,19 @@ public class MappedFile extends ReferenceResource {
         return this.fileFromOffset;
     }
 
+    /**
+     * 追加消息到MappedFile中
+     * @param data
+     * @return
+     */
     public boolean appendMessage(final byte[] data) {
+        // 当前写指针
         int currentPos = this.wrotePosition.get();
 
         if ((currentPos + data.length) <= this.fileSize) {
             try {
                 this.fileChannel.position(currentPos);
+                // 写数据到FileChannel中
                 this.fileChannel.write(ByteBuffer.wrap(data));
             } catch (Throwable e) {
                 log.error("Error occurred when append message to mappedFile.", e);
@@ -626,6 +633,8 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 预热MappedFile
+     *
      * 每隔OS_PAGE_SIZE向mappedByteBuffer写入一个0，对应页就会产生一个缺页中断，
      * 操作系统就会为对应页分配物理内存
      * @param type

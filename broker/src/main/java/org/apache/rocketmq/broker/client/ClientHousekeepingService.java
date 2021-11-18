@@ -42,12 +42,16 @@ public class ClientHousekeepingService implements ChannelEventListener {
         this.brokerController = brokerController;
     }
 
+    /**
+     * 周期性的检查一些异常的Channel，并移除
+     */
     public void start() {
 
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 try {
+                    // 扫描一些异常的Channel并移除
                     ClientHousekeepingService.this.scanExceptionChannel();
                 } catch (Throwable e) {
                     log.error("Error occurred when scan not active client channels.", e);
@@ -56,9 +60,20 @@ public class ClientHousekeepingService implements ChannelEventListener {
         }, 1000 * 10, 1000 * 10, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 扫描一些异常的Channel并移除：
+     * - 扫描生产者不活跃的Channel并移除
+     * - 扫描消费者不活跃的Channel并移除
+     * - 扫描过滤服务器不活跃的Channel并移除
+     */
     private void scanExceptionChannel() {
+        // 扫描生产者不活跃的Channel并移除
         this.brokerController.getProducerManager().scanNotActiveChannel();
+
+        // 扫描消费者不活跃的Channel并移除
         this.brokerController.getConsumerManager().scanNotActiveChannel();
+
+        // 扫描过滤服务器不活跃的Channel并移除
         this.brokerController.getFilterServerManager().scanNotActiveChannel();
     }
 

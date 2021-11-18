@@ -245,6 +245,12 @@ public class MappedFileQueue {
         return 0;
     }
 
+    /**
+     * 获取最后一个MappedFile
+     * @param startOffset
+     * @param needCreate
+     * @return
+     */
     public MappedFile getLastMappedFile(final long startOffset, boolean needCreate) {
         long createOffset = -1;
         // 尝试从mappedFiles集合中获取最后一个
@@ -269,12 +275,13 @@ public class MappedFileQueue {
                 + UtilAll.offset2FileName(createOffset + this.mappedFileSize);
             MappedFile mappedFile = null;
 
-            // 交给创建MappedFile的服务去创建
             if (this.allocateMappedFileService != null) {
+                // 交给MappedFile文件分配服务去创建，创建两个文件：下一个和下下一个
                 mappedFile = this.allocateMappedFileService.putRequestAndReturnMappedFile(nextFilePath,
                     nextNextFilePath, this.mappedFileSize);
             } else {
                 try {
+                    // 直接创建一个MappedFile对象
                     mappedFile = new MappedFile(nextFilePath, this.mappedFileSize);
                 } catch (IOException e) {
                     log.error("create mappedFile exception", e);
@@ -295,6 +302,12 @@ public class MappedFileQueue {
         return mappedFileLast;
     }
 
+    /**
+     * 获取最后一个MappedFile，如果不存在就创建一个新的MappedFile，或者如果最后一个MappedFile已经满了，
+     * 也创建一个新的MappedFile
+     * @param startOffset
+     * @return
+     */
     public MappedFile getLastMappedFile(final long startOffset) {
         return getLastMappedFile(startOffset, true);
     }
