@@ -761,6 +761,7 @@ public class CommitLog {
                         beginTimeInLock = 0;
                         return CompletableFuture.completedFuture(new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, result));
                     }
+                    // 往MappedFile中追加消息
                     result = mappedFile.appendMessage(msg, this.appendMessageCallback, putMessageContext);
                     break;
                 case MESSAGE_SIZE_EXCEEDED:
@@ -1224,6 +1225,7 @@ public class CommitLog {
                     }
 
                     long begin = System.currentTimeMillis();
+                    // 刷盘
                     CommitLog.this.mappedFileQueue.flush(flushPhysicQueueLeastPages);
                     long storeTimestamp = CommitLog.this.mappedFileQueue.getStoreTimestamp();
                     if (storeTimestamp > 0) {
@@ -1419,6 +1421,15 @@ public class CommitLog {
             this.maxMessageSize = size;
         }
 
+        /**
+         * 追加消息
+         * @param fileFromOffset
+         * @param byteBuffer
+         * @param maxBlank
+         * @param msgInner
+         * @param putMessageContext
+         * @return
+         */
         public AppendMessageResult doAppend(final long fileFromOffset, final ByteBuffer byteBuffer, final int maxBlank,
             final MessageExtBrokerInner msgInner, PutMessageContext putMessageContext) {
             // STORETIMESTAMP + STOREHOSTADDRESS + OFFSET <br>

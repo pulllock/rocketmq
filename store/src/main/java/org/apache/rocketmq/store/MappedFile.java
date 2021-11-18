@@ -288,8 +288,16 @@ public class MappedFile extends ReferenceResource {
         return fileChannel;
     }
 
+    /**
+     * 往MappedFile中追加消息
+     * @param msg
+     * @param cb
+     * @param putMessageContext
+     * @return
+     */
     public AppendMessageResult appendMessage(final MessageExtBrokerInner msg, final AppendMessageCallback cb,
             PutMessageContext putMessageContext) {
+        // 追加消息
         return appendMessagesInner(msg, cb, putMessageContext);
     }
 
@@ -298,6 +306,13 @@ public class MappedFile extends ReferenceResource {
         return appendMessagesInner(messageExtBatch, cb, putMessageContext);
     }
 
+    /**
+     * 追加消息到MappedFile
+     * @param messageExt
+     * @param cb
+     * @param putMessageContext
+     * @return
+     */
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb,
             PutMessageContext putMessageContext) {
         assert messageExt != null;
@@ -307,11 +322,20 @@ public class MappedFile extends ReferenceResource {
         int currentPos = this.wrotePosition.get();
 
         if (currentPos < this.fileSize) {
-            // 通过slice方法创建一个与MappedFile共享的内存区
+            /*
+                通过slice方法创建一个与MappedFile共享的内存区。
+                writeBuffer不为null，说明开启了临时存储池，使用的是堆外内存；
+                writeBuffer为null，没有开启临时存储池，使用的是内存映射的MappedByteBuffer。
+
+                下面会往ByteBuffer中写数据，此时并没有执行刷盘，还有另外的定时任务去定时执行：
+                - 如果开启了临时存储池，则会定时commit数据到FileChannel，在定时的进行刷盘
+                - 如果没开启临时存储池，则会定时的进行刷盘
+             */
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             byteBuffer.position(currentPos);
             AppendMessageResult result;
             if (messageExt instanceof MessageExtBrokerInner) {
+                // 追加消息
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos,
                         (MessageExtBrokerInner) messageExt, putMessageContext);
             } else if (messageExt instanceof MessageExtBatch) {

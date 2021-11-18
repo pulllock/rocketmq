@@ -409,7 +409,9 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         if (!messageStoreConfig.isEnableDLegerCommitLog()) {
+            // 高可用服务启动：master开始监听，等待slave连接
             this.haService.start();
+            // 延迟消息服务启动
             this.handleScheduleMessageService(messageStoreConfig.getBrokerRole());
         }
 
@@ -1086,6 +1088,14 @@ public class DefaultMessageStore implements MessageStore {
         return this.commitLog.getData(offset);
     }
 
+    /**
+     * 消息持久化到CommitLog中，并唤醒ReputMessageService服务，让Consumer进行消费
+     * @param startOffset starting offset.
+     * @param data data to append.
+     * @param dataStart the start index of data array
+     * @param dataLength the length of data array
+     * @return
+     */
     @Override
     public boolean appendToCommitLog(long startOffset, byte[] data, int dataStart, int dataLength) {
         if (this.shutdown) {
@@ -1093,8 +1103,10 @@ public class DefaultMessageStore implements MessageStore {
             return false;
         }
 
+        // 持久化到CommitLog中
         boolean result = this.commitLog.appendData(startOffset, data, dataStart, dataLength);
         if (result) {
+            // reputMessageService服务唤醒，让consumer进行消费
             this.reputMessageService.wakeup();
         } else {
             log.error("appendToPhyQueue failed " + startOffset + " " + data.length);

@@ -366,6 +366,10 @@ public class BrokerController {
      * 文件监视服务
      */
     private FileWatchService fileWatchService;
+
+    /**
+     * 事务消息检查服务
+     */
     private TransactionalMessageCheckService transactionalMessageCheckService;
     private TransactionalMessageService transactionalMessageService;
     private AbstractTransactionalMessageCheckListener transactionalMessageCheckListener;
@@ -1223,8 +1227,12 @@ public class BrokerController {
         }
 
         if (!messageStoreConfig.isEnableDLegerCommitLog()) {
+            // 启动事务消息检查服务
             startProcessorByHa(messageStoreConfig.getBrokerRole());
+
+            // 处理slave消息同步
             handleSlaveSynchronize(messageStoreConfig.getBrokerRole());
+
             // 第一次启动，这里会强制执行发送心跳包
             this.registerBrokerAll(true, false, true);
         }
@@ -1514,11 +1522,18 @@ public class BrokerController {
         return accessValidatorMap;
     }
 
+    /**
+     * 处理slave消息同步
+     * @param role
+     */
     private void handleSlaveSynchronize(BrokerRole role) {
+        // Broker是slave节点
         if (role == BrokerRole.SLAVE) {
             if (null != slaveSyncFuture) {
                 slaveSyncFuture.cancel(false);
             }
+
+            // 先设置master地址为null，刚开始启动的时候不能同步，在Broker向NameServer注册之后才能知道master地址
             this.slaveSynchronize.setMasterAddr(null);
             // Slave定时从Master同步各种配置
             slaveSyncFuture = this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
@@ -1532,7 +1547,9 @@ public class BrokerController {
                     }
                 }
             }, 1000 * 3, 1000 * 10, TimeUnit.MILLISECONDS);
-        } else {
+        }
+        // Broker是master节点
+        else {
             //handle the slave synchronise
             if (null != slaveSyncFuture) {
                 slaveSyncFuture.cancel(false);

@@ -48,6 +48,9 @@ public class SlaveSynchronize {
         this.masterAddr = masterAddr;
     }
 
+    /**
+     * slave从master同步各种配置
+     */
     public void syncAll() {
         this.syncTopicConfig();
         this.syncConsumerOffset();
