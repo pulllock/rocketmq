@@ -321,6 +321,10 @@ public class HAService {
 
         private final WaitNotifyObject notifyTransferObject = new WaitNotifyObject();
         private final PutMessageSpinLock lock = new PutMessageSpinLock();
+
+        /**
+         * 存放要同步的请求
+         */
         private volatile LinkedList<CommitLog.GroupCommitRequest> requestsWrite = new LinkedList<>();
         private volatile LinkedList<CommitLog.GroupCommitRequest> requestsRead = new LinkedList<>();
 
@@ -342,6 +346,9 @@ public class HAService {
             this.notifyTransferObject.wakeup();
         }
 
+        /**
+         * 交换requestsWrite和requestsRead的数据
+         */
         private void swapRequests() {
             lock.lock();
             try {
@@ -354,14 +361,13 @@ public class HAService {
         }
 
         /**
-         * 判断主从同步是否完成的依据是Slave中已成功复制的最大偏移量是否大于等于消息生产者发送消息后消息服务端
-         * 返回下一条消息的起始偏移量，如果是则表示主从同步复制已完成，唤醒消息发送线程，否则等待1s再判断。
-         * 每一个任务在一批任务中循环判断5次。
-         * 消息发送者返回有两种情况：等待超过5s或者通知主从复制完成。
+         * 等待同步完成
          */
         private void doWaitTransfer() {
+            // 已经将requestsWrite的数据交换到了requestsRead中
             if (!this.requestsRead.isEmpty()) {
                 for (CommitLog.GroupCommitRequest req : this.requestsRead) {
+                    // push2SlaveMaxOffset同步到slave的最大的偏移量，如果比要同步的偏移量大，说明已经同步过
                     boolean transferOK = HAService.this.push2SlaveMaxOffset.get() >= req.getNextOffset();
                     long waitUntilWhen = HAService.this.defaultMessageStore.getSystemClock().now()
                             + HAService.this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout();
@@ -374,6 +380,7 @@ public class HAService {
                         log.warn("transfer messsage to slave timeout, " + req.getNextOffset());
                     }
 
+                    // 唤醒写消息的线程中的阻塞
                     req.wakeupCustomer(transferOK ? PutMessageStatus.PUT_OK : PutMessageStatus.FLUSH_SLAVE_TIMEOUT);
                 }
 
@@ -386,7 +393,10 @@ public class HAService {
 
             while (!this.isStopped()) {
                 try {
+                    // 被唤醒后会调用onWaitEnd方法，会交换requestsWrite和requestsRead的数据
                     this.waitForRunning(10);
+
+                    // 等待同步完成
                     this.doWaitTransfer();
                 } catch (Exception e) {
                     log.warn(this.getServiceName() + " service has exception. ", e);
@@ -625,11 +635,18 @@ public class HAService {
             return true;
         }
 
+        /**
+         * 向master上报新的偏移量
+         * @return
+         */
         private boolean reportSlaveMaxOffsetPlus() {
             boolean result = true;
+            // 当前CommitLog的最大偏移量
             long currentPhyOffset = HAService.this.defaultMessageStore.getMaxPhyOffset();
+            // 如果当前CommitLog的最大偏移量比之前上报的偏移量要大，就继续向master上报最新的偏移量
             if (currentPhyOffset > this.currentReportedOffset) {
                 this.currentReportedOffset = currentPhyOffset;
+                // 上传最新的偏移量
                 result = this.reportSlaveMaxOffset(this.currentReportedOffset);
                 if (!result) {
                     this.closeMaster();

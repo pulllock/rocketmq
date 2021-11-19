@@ -409,17 +409,20 @@ public class MappedFile extends ReferenceResource {
 
     /**
      * 将数据从缓冲区刷到磁盘中
-     * @return The current flushed position
+     * @param flushLeastPages 刷盘时最少的page数，同步刷盘的时候这个为0，异步刷盘的时候这个为4
+     * @return The current flushed position 当前已刷盘的位置
      */
     public int flush(final int flushLeastPages) {
         /**
-         * 是否能够flush，需要满足以下任意条件：
-         * 1. 映射文件已满
-         * 2. flushLeastPages > 0 并且未flush部分超过flushLeastPages
-         * 3. flushLeastPages = 0 并且有新写入部分
+         * 是否能够刷盘，需要满足以下任意条件：
+         * 1. 映射文件已满，不管是同步刷盘还是异步刷盘，都会进行刷盘
+         * 2. flushLeastPages > 0，说明是异步刷盘，则需要看现在累积的数据页有没有达到flushLeastPages指定的页，
+         *    如果达到了指定的数，则可以进行刷盘；否则说明数据还不够，则不进行刷盘。
+         * 3. flushLeastPages = 0，说明是同步刷盘，判断如果有新消息写入就进行刷盘
          */
         if (this.isAbleToFlush(flushLeastPages)) {
             if (this.hold()) {
+                // 当前消息写入后的位置
                 int value = getReadPosition();
 
                 try {
@@ -435,6 +438,7 @@ public class MappedFile extends ReferenceResource {
                     log.error("Error occurred when force data to disk.", e);
                 }
 
+                // 更新已经刷盘的位置
                 this.flushedPosition.set(value);
                 this.release();
             } else {
@@ -450,7 +454,7 @@ public class MappedFile extends ReferenceResource {
      *
      * 在开启了临时存储池的时候会使用，开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），
      * 也就是写入PageCache，之后再刷（flush）到磁盘上。
-     * @param commitLeastPages 本次提交最小的页数，如果待提交数据不满commitLeastPages，则不执行本次提交操作
+     * @param commitLeastPages commit时最少的page数，如果为0则会立即进行commit，如果大于0，则需要判断累积的数据是否达到指定page数，如果达到了才进行commit
      * @return
      */
     public int commit(final int commitLeastPages) {
@@ -465,9 +469,14 @@ public class MappedFile extends ReferenceResource {
 
         /*
             writeBuffer不为空，说明使用的是临时存储池，临时内存池使用的是堆外内存，这种方式提交需要写到FileChannel中。
+            需要先判断是否能提交：
+            - 缓冲区已满，可以提交
+            - commitLeastPages为0的话，如果有新消息就可以立刻提交
+            - commitLeastPages大于0的话，需要判断累积的数据是否达到指定page数，如果达到了才进行提交，如果没有达到就不进行提交
          */
         if (this.isAbleToCommit(commitLeastPages)) {
             if (this.hold()) {
+                // 提交
                 commit0();
                 this.release();
             } else {
@@ -485,8 +494,14 @@ public class MappedFile extends ReferenceResource {
         return this.committedPosition.get();
     }
 
+    /**
+     * 提交数据到FileChannel中
+     */
     protected void commit0() {
+        // 当前写的位置
         int writePos = this.wrotePosition.get();
+
+        // 上次提交的位置
         int lastCommittedPosition = this.committedPosition.get();
 
         if (writePos - lastCommittedPosition > 0) {
@@ -500,6 +515,8 @@ public class MappedFile extends ReferenceResource {
                 this.fileChannel.position(lastCommittedPosition);
                 // 将MappedFile#writeBuffer中的数据提交到文件通道FileChannel中
                 this.fileChannel.write(byteBuffer);
+
+                // 更新已提交的位置
                 this.committedPosition.set(writePos);
             } catch (Throwable e) {
                 log.error("Error occurred when commit data to FileChannel.", e);
@@ -507,8 +524,22 @@ public class MappedFile extends ReferenceResource {
         }
     }
 
+    /**
+     * 是否能够刷盘
+     * 需要满足以下任意条件：
+     * 1. 映射文件已满，不管是同步刷盘还是异步刷盘，都会进行刷盘
+     * 2. flushLeastPages > 0，说明是异步刷盘，则需要看现在累积的数据页有没有达到flushLeastPages指定的页，
+     *    如果达到了指定的数，则可以进行刷盘；否则说明数据还不够，则不进行刷盘。
+     * 3. flushLeastPages = 0，说明是同步刷盘，判断如果有新消息写入就进行刷盘
+     *
+     * @param flushLeastPages 刷盘时最少的page数，同步刷盘的时候这个为0，异步刷盘的时候这个为4
+     * @return
+     */
     private boolean isAbleToFlush(final int flushLeastPages) {
+        // 上一次刷盘后的位置
         int flush = this.flushedPosition.get();
+
+        // 当前消息写入后的位置
         int write = getReadPosition();
 
         // 映射文件已满，可以flush
@@ -517,26 +548,42 @@ public class MappedFile extends ReferenceResource {
         }
 
         // flushLeastPages大于0，未flush部分超过flushLeastPages
+        /*
+            flushLeastPages大于0，说明是异步刷盘，如果是同步刷盘的数这个值是0.
+            这里是计算异步刷盘的时候，累积的没有刷盘的数据页有没有达到flushLeastPages指定的页数，
+            如果达到了说明累积了足够多的数据，已经可以进行刷盘了；否则说明数据还不够，还不能进行刷盘。
+         */
         if (flushLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= flushLeastPages;
         }
 
-        // flushLeastPages = 0且有新写入部分
+        // 同步刷盘，当有新消息的时候就需要进行刷盘
         return write > flush;
     }
 
+    /**
+     * 是否能commit
+     * @param commitLeastPages commit时最少的page数，如果为0则会立即进行commit，如果大于0，则需要判断累积的数据是否达到指定page数，如果达到了才进行commit
+     * @return
+     */
     protected boolean isAbleToCommit(final int commitLeastPages) {
+        // 已经提交的位置
         int flush = this.committedPosition.get();
+
+        // 当前消息的写的位置
         int write = this.wrotePosition.get();
 
+        // 缓冲区已满
         if (this.isFull()) {
             return true;
         }
 
+        // commitLeastPages大于0，需要判断累积的数据是否达到指定page数，如果达到了才进行commit
         if (commitLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= commitLeastPages;
         }
 
+        // commitLeastPages为0，只要有新数据就可以进行提交
         return write > flush;
     }
 

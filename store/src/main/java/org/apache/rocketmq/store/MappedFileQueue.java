@@ -520,14 +520,22 @@ public class MappedFileQueue {
         return deleteCount;
     }
 
+    /**
+     * 刷盘
+     * @param flushLeastPages 刷盘时最少的page数，同步刷盘的时候这个为0，异步刷盘的时候这个为4
+     * @return
+     */
     public boolean flush(final int flushLeastPages) {
         boolean result = true;
+        // 根据上一次刷盘后的偏移量，找到对应的MappedFile文件
         MappedFile mappedFile = this.findMappedFileByOffset(this.flushedWhere, this.flushedWhere == 0);
         if (mappedFile != null) {
             long tmpTimeStamp = mappedFile.getStoreTimestamp();
+            // 刷盘，返回的是当前已刷盘的位置
             int offset = mappedFile.flush(flushLeastPages);
             long where = mappedFile.getFileFromOffset() + offset;
             result = where == this.flushedWhere;
+            // 已经刷盘的位置
             this.flushedWhere = where;
             if (0 == flushLeastPages) {
                 this.storeTimestamp = tmpTimeStamp;
@@ -542,7 +550,7 @@ public class MappedFileQueue {
      *
      * 在开启了临时存储池的时候会使用，开启了临时存储池，消息会先写到堆外内存，再提交（commit）到文件通道（FileChannel），
      * 也就是写入PageCache，之后再刷（flush）到磁盘上。
-     * @param commitLeastPages
+     * @param commitLeastPages commit时最少的page数，如果为0则会立即进行commit，如果大于0，则需要判断累积的数据是否达到指定page数，如果达到了才进行commit
      * @return
      */
     public boolean commit(final int commitLeastPages) {
@@ -550,10 +558,11 @@ public class MappedFileQueue {
         // 根据committedWhere找到具体的MappedFile文件
         MappedFile mappedFile = this.findMappedFileByOffset(this.committedWhere, this.committedWhere == 0);
         if (mappedFile != null) {
-            // MappedFile的commit方法
+            // MappedFile的commit方法进行提交
             int offset = mappedFile.commit(commitLeastPages);
             long where = mappedFile.getFileFromOffset() + offset;
             result = where == this.committedWhere;
+            // 更新已提交位置
             this.committedWhere = where;
         }
 

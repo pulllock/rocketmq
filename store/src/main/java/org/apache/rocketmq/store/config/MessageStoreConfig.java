@@ -53,14 +53,17 @@ public class MessageStoreConfig {
 
     // CommitLog flush interval
     // flush data to disk
-    // CommitLog刷盘时间间隔，默认500毫秒。
-    // RocketMQ会有一个后台线程，将消息刷盘，这个就是该线程每次运行后等待的时间
+    /**
+     * CommitLog刷盘时间间隔，默认500毫秒。
+     */
     @ImportantField
     private int flushIntervalCommitLog = 500;
 
     // Only used if TransientStorePool enabled
     // flush data to FileChannel
-    // 提交消息到ComitLog对应的文件通道的间隔时间，默认为200毫秒
+    /**
+     * 提交消息到ComitLog对应的文件通道的间隔时间，默认为200毫秒
+     */
     @ImportantField
     private int commitIntervalCommitLog = 200;
 
@@ -71,6 +74,9 @@ public class MessageStoreConfig {
     private boolean useReentrantLockWhenPutMessage = true;
 
     // Whether schedule flush
+    /**
+     * 是否定时刷盘
+     */
     @ImportantField
     private boolean flushCommitLogTimed = true;
     // ConsumeQueue flush interval
@@ -100,18 +106,37 @@ public class MessageStoreConfig {
     // This check adds some overhead,so it may be disabled in cases seeking extreme performance.
     private boolean checkCRCOnRecover = true;
     // How many pages are to be flushed when flush CommitLog
-    // 每次commitlog刷盘时最小的发生变化的页数，默认4页
+    /**
+     * 每次commitlog刷盘时最小的发生变化的页数，默认4页
+     */
     private int flushCommitLogLeastPages = 4;
+
     // How many pages are to be committed when commit data to file
-    // 每次commitlog提交时最小的发生变化的页数，默认4页
+    /**
+     * 每次commitlog提交时最小的发生变化的页数，默认4页
+     */
     private int commitCommitLogLeastPages = 4;
+
     // Flush page size when the disk in warming state
-    // 文件预热，每多少页刷盘一次，默认4096
+    /**
+     * 文件预热，每多少页刷盘一次，默认4096
+     */
     private int flushLeastPagesWhenWarmMapedFile = 1024 / 4 * 16;
+
     // How many pages are to be flushed when flush ConsumeQueue
-    // consumequeue一次刷盘至少需要的脏页数量，默认2
+    /**
+     * consumequeue一次刷盘至少需要的脏页数量，默认2
+     */
     private int flushConsumeQueueLeastPages = 2;
+
+    /**
+     * 消息完全刷盘时间间隔，默认10s
+     */
     private int flushCommitLogThoroughInterval = 1000 * 10;
+
+    /**
+     * 消息完全提交的时间间隔，默认200ms
+     */
     private int commitCommitLogThoroughInterval = 200;
     private int flushConsumeQueueThoroughInterval = 1000 * 60;
     @ImportantField
