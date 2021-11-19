@@ -1000,6 +1000,7 @@ public class CommitLog {
                 }
             }
         }
+        // master如果是异步类型的，直接返回，不关心复制的过程
         return CompletableFuture.completedFuture(PutMessageStatus.PUT_OK);
     }
 
