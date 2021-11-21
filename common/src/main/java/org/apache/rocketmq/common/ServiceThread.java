@@ -28,7 +28,15 @@ public abstract class ServiceThread implements Runnable {
     private static final long JOIN_TIME = 90 * 1000;
 
     private Thread thread;
+
+    /**
+     * 用来阻塞线程用的
+     */
     protected final CountDownLatch2 waitPoint = new CountDownLatch2(1);
+
+    /**
+     * 用来标识线程有没有被唤醒
+     */
     protected volatile AtomicBoolean hasNotified = new AtomicBoolean(false);
     protected volatile boolean stopped = false;
     protected boolean isDaemon = false;
@@ -120,13 +128,26 @@ public abstract class ServiceThread implements Runnable {
         log.info("makestop thread " + this.getServiceName());
     }
 
+    /**
+     * 唤醒线程
+     */
     public void wakeup() {
+        // 先将标志置为已通知，告诉其他的线程要进行唤醒了
         if (hasNotified.compareAndSet(false, true)) {
+            // 进行唤醒
             waitPoint.countDown(); // notify
         }
     }
 
+    /**
+     * 让线程阻塞等待指定的时间，到了时间后继续运行，或者调用了wakeup进行唤醒
+     * @param interval
+     */
     protected void waitForRunning(long interval) {
+        /*
+            如果cas能成功，说明线程已经被唤醒了，也就是刚好有调用wakeup方法，但是waitPoint还没有countDown，
+            此时当前方法就不能再继续进行阻塞等待的操作了，因为接下来waitPoint就要被释放掉了，此时直接执行唤醒后要执行的方法
+         */
         if (hasNotified.compareAndSet(true, false)) {
             this.onWaitEnd();
             return;
@@ -136,15 +157,21 @@ public abstract class ServiceThread implements Runnable {
         waitPoint.reset();
 
         try {
+            // 执行带超时的等待
             waitPoint.await(interval, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Interrupted", e);
         } finally {
+            // 等待结束后，将hasNotified置为false，后续可以继续执行等待
             hasNotified.set(false);
+            // 等待结束后执行的方法
             this.onWaitEnd();
         }
     }
 
+    /**
+     * 线程被唤醒后要执行的方法
+     */
     protected void onWaitEnd() {
     }
 

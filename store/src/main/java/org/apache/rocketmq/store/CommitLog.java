@@ -962,6 +962,11 @@ public class CommitLog {
         // Asynchronous flush
         // 异步刷盘
         else {
+            /*
+                异步刷盘的操作是在一个单独的线程中每隔500ms做一次，每一次刷盘完成后就会暂停500ms，等待
+                500ms之后继续刷盘。如果在等待过程中有消息写入了commitlog，此时可以直接调用wakeup方法
+                唤醒阻塞中的刷盘线程，让其继续看是不是进行刷盘操作。
+             */
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                 flushCommitLogService.wakeup();
             } else  {
@@ -1257,7 +1262,13 @@ public class CommitLog {
                     if (flushCommitLogTimed) {
                         Thread.sleep(interval);
                     }
-                    // 如果不是定时刷盘，则会进行阻塞，等待消息写入后的唤醒
+                    /*
+                        waitForRunning的意思是让线程阻塞一段时间，到了时间后继续运行，或者调用了wakeup进行唤醒。
+                        也就是说一次异步刷盘操作后会暂停500ms后在进行刷盘，或者是在暂停的时候被wakeup唤醒了，也可
+                        以继续进行刷盘。
+
+                        在有新消息写到commitlog中的时候，会调用wakeup方法唤醒当前刷盘线程。
+                     */
                     else {
                         this.waitForRunning(interval);
                     }
@@ -1431,7 +1442,13 @@ public class CommitLog {
 
             while (!this.isStopped()) {
                 try {
-                    // 被唤醒后会调用onWaitEnd方法，交换requestsRead和requestsWrite的数据
+                    /*
+                        waitForRunning的意思是让线程阻塞一段时间，到了时间后继续运行，或者调用了wakeup进行唤醒。
+                        也就是说一次异步刷盘操作后会暂停500ms后在进行刷盘，或者是在暂停的时候被wakeup唤醒了，也可
+                        以继续进行刷盘。
+
+                        在有新消息写到commitlog中的时候，会调用wakeup方法唤醒当前刷盘线程。
+                     */
                     this.waitForRunning(10);
                     // 刷盘操作
                     this.doCommit();
