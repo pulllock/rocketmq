@@ -31,6 +31,10 @@ import org.apache.rocketmq.logging.InternalLogger;
 
 public class RequestFutureTable {
     private static InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 存放请求Id和RequestResponseFuture的关系
+     */
     private static ConcurrentHashMap<String, RequestResponseFuture> requestFutureTable = new ConcurrentHashMap<String, RequestResponseFuture>();
     private static final AtomicInteger PRODUCER_NUM = new AtomicInteger(0);
 
@@ -38,6 +42,9 @@ public class RequestFutureTable {
         return requestFutureTable;
     }
 
+    /**
+     * 扫描过期请求
+     */
     public static void scanExpiredRequest() {
         final List<RequestResponseFuture> rfList = new LinkedList<RequestResponseFuture>();
         Iterator<Map.Entry<String, RequestResponseFuture>> it = requestFutureTable.entrySet().iterator();
@@ -45,6 +52,7 @@ public class RequestFutureTable {
             Map.Entry<String, RequestResponseFuture> next = it.next();
             RequestResponseFuture rep = next.getValue();
 
+            // 请求超时了，将请求从缓存中移除掉
             if (rep.isTimeout()) {
                 it.remove();
                 rfList.add(rep);

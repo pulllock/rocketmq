@@ -74,6 +74,9 @@ public class RequestCode {
 
     public static final int VIEW_MESSAGE_BY_ID = 33;
 
+    /**
+     * 心跳请求
+     */
     public static final int HEART_BEAT = 34;
 
     public static final int UNREGISTER_CLIENT = 35;
@@ -83,6 +86,9 @@ public class RequestCode {
     public static final int END_TRANSACTION = 37;
     public static final int GET_CONSUMER_LIST_BY_GROUP = 38;
 
+    /**
+     * 检查事务状态
+     */
     public static final int CHECK_TRANSACTION_STATE = 39;
 
     public static final int NOTIFY_CONSUMER_IDS_CHANGED = 40;

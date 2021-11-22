@@ -55,11 +55,13 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
  *
  * <p> <strong>Thread Safety:</strong> After configuring and starting process, this class can be regarded as thread-safe
  * and used among multiple threads context. </p>
+ * 默认的消息生产者客户端
  */
 public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Wrapping internal implementations for virtually all methods presented in this class.
+     * 默认消息生产者实现类
      */
     protected final transient DefaultMQProducerImpl defaultMQProducerImpl;
     private final InternalLogger log = ClientLogger.getLog();
@@ -85,14 +87,14 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Number of queues to create per default topic.
      *
-     * 默认topic在每一个Broker的队列数量
+     * 默认topic在每一个Broker中队列的数量，默认是4
      */
     private volatile int defaultTopicQueueNums = 4;
 
     /**
      * Timeout for sending messages.
      *
-     * 发消息默认超时时间 3秒
+     * 发消息默认超时时间3秒
      */
     private int sendMsgTimeout = 3000;
 
@@ -288,10 +290,13 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * to invoke this method before sending or querying messages. </strong> </p>
      *
      * @throws MQClientException if there is any unexpected error.
+     * 启动消息生产者
      */
     @Override
     public void start() throws MQClientException {
         this.setProducerGroup(withNamespace(this.producerGroup));
+
+        // 启动消息生产者
         this.defaultMQProducerImpl.start();
         if (null != traceDispatcher) {
             try {

@@ -68,20 +68,31 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * Netty客户端
+ */
 public class NettyRemotingClient extends NettyRemotingAbstract implements RemotingClient {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
 
     private static final long LOCK_TIMEOUT_MILLIS = 3000;
 
     private final NettyClientConfig nettyClientConfig;
+
     /**
      * 类实例化的时候直接创建一个Bootstrap
      */
     private final Bootstrap bootstrap = new Bootstrap();
+
+    /**
+     * 执行具体业务的Worker线程池
+     */
     private final EventLoopGroup eventLoopGroupWorker;
     private final Lock lockChannelTables = new ReentrantLock();
     private final ConcurrentMap<String /* addr */, ChannelWrapper> channelTables = new ConcurrentHashMap<String, ChannelWrapper>();
 
+    /**
+     * 定时扫描过期的响应信息的线程池
+     */
     private final Timer timer = new Timer("ClientHouseKeepingService", true);
 
     private final AtomicReference<List<String>> namesrvAddrList = new AtomicReference<List<String>>();
@@ -96,6 +107,10 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
      */
     private ExecutorService callbackExecutor;
     private final ChannelEventListener channelEventListener;
+
+    /**
+     * 默认事件处理的线程池
+     */
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
 
     public NettyRemotingClient(final NettyClientConfig nettyClientConfig) {
@@ -122,7 +137,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             }
         });
 
-        // 创建Netty的NioEventLoopGroup对象
+        // 执行具体业务的Worker线程池
         this.eventLoopGroupWorker = new NioEventLoopGroup(1, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -205,6 +220,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 }
             });
 
+        // 启动定时扫描过期的响应的线程池
         this.timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {

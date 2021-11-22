@@ -195,17 +195,21 @@ public class HAService {
 
     /**
      * Listens to slave connections to create {@link HAConnection}.
-     * master端监听slave连接，只用来处理连接的accept事件
+     * master端监听slave连接，只用来处理连接的accept事件，
+     * 每来一个salve请求，都会新建一个HAConnection对象。一个master可以有多个slave连接。
      */
     class AcceptSocketService extends ServiceThread {
+
         /**
          * 服务监听套接字
          */
         private final SocketAddress socketAddressListen;
+
         /**
          * 服务端socket通道
          */
         private ServerSocketChannel serverSocketChannel;
+
         /**
          * 事件选择器
          */
@@ -276,9 +280,9 @@ public class HAService {
                                         + sc.socket().getRemoteSocketAddress());
 
                                     try {
-                                        // 收到slave的上报的请求后，将请求封装成HAConnection对象
+                                        // 收到slave的连接请求之后，将请求封装成HAConnection对象
                                         HAConnection conn = new HAConnection(HAService.this, sc);
-                                        // HAConnection对象开启读写线程
+                                        // HAConnection对象开启读写线程，等待slave上报偏移量以及master写数据给slave
                                         conn.start();
                                         // 添加到连接列表缓存起来
                                         HAService.this.addConnection(conn);

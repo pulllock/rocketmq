@@ -93,6 +93,10 @@ public class MQClientInstance {
     private final InternalLogger log = ClientLogger.getLog();
     private final ClientConfig clientConfig;
     private final int instanceIndex;
+
+    /**
+     * 客户端的id，格式：IP@instanceName@unitName，unitName可选
+     */
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
 
@@ -160,7 +164,7 @@ public class MQClientInstance {
     });
 
     /**
-     * 处理服务器发来的请求
+     * 客户端处理服务器发来的请求的处理器
      */
     private final ClientRemotingProcessor clientRemotingProcessor;
 
@@ -170,7 +174,7 @@ public class MQClientInstance {
     private final PullMessageService pullMessageService;
 
     /**
-     * rebalance服务
+     * 负载均衡服务
      */
     private final RebalanceService rebalanceService;
 
@@ -198,7 +202,11 @@ public class MQClientInstance {
         this.nettyClientConfig = new NettyClientConfig();
         this.nettyClientConfig.setClientCallbackExecutorThreads(clientConfig.getClientCallbackExecutorThreads());
         this.nettyClientConfig.setUseTLS(clientConfig.isUseTLS());
+
+        // 客户端用来处理服务端发来的请求的处理器
         this.clientRemotingProcessor = new ClientRemotingProcessor(this);
+
+        // 创建客户端实现类
         this.mQClientAPIImpl = new MQClientAPIImpl(this.nettyClientConfig, this.clientRemotingProcessor, rpcHook, clientConfig);
 
         if (this.clientConfig.getNamesrvAddr() != null) {
@@ -207,17 +215,23 @@ public class MQClientInstance {
             log.info("user specified name server address: {}", this.clientConfig.getNamesrvAddr());
         }
 
+        // 客户端的id，格式：IP@instanceName@unitName，unitName可选
         this.clientId = clientId;
 
+        // MQ管理实现类
         this.mQAdminImpl = new MQAdminImpl(this);
 
+        // 拉消息的服务
         this.pullMessageService = new PullMessageService(this);
 
+        // 负载均衡服务
         this.rebalanceService = new RebalanceService(this);
 
+        // 内部使用的生产者
         this.defaultMQProducer = new DefaultMQProducer(MixAll.CLIENT_INNER_PRODUCER_GROUP);
         this.defaultMQProducer.resetClientConfig(clientConfig);
 
+        // 消费状态管理
         this.consumerStatsManager = new ConsumerStatsManager(this.scheduledExecutorService);
 
         log.info("Created a new client Instance, InstanceIndex:{}, ClientID:{}, ClientConfig:{}, ClientVersion:{}, SerializerType:{}",
@@ -291,27 +305,53 @@ public class MQClientInstance {
         return mqList;
     }
 
+    /**
+     * 启动MQ客户端实例
+     * @throws MQClientException
+     */
     public void start() throws MQClientException {
 
         synchronized (this) {
             switch (this.serviceState) {
                 case CREATE_JUST:
                     this.serviceState = ServiceState.START_FAILED;
+
                     // If not specified,looking address from name server
+                    // 如果客户端没有指定NameServer地址，则自动从指定的地址获取NameServer地址
                     if (null == this.clientConfig.getNamesrvAddr()) {
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
+
                     // Start request-response channel
+                    // 启动通信用的客户端，这里是Netty的客户端
                     this.mQClientAPIImpl.start();
+
                     // Start various schedule tasks
+                    /*
+                        启动定时任务：
+                        - 如果没有配置NameServer地址，则定时从指定的地址获取NameServer地址
+                        - 定时从NameServer中获取Topic路由信息，并更新客户端本地缓存
+                        - 定时清理已下线的Broker
+                        - 定时发送心跳到所有的Broker
+                        - 定时持久化消费者的消费偏移量
+                        - 定时调整线程池配置
+                     */
                     this.startScheduledTask();
+
                     // Start pull service
+                    // 开启拉取消息的服务线程
                     this.pullMessageService.start();
+
                     // Start rebalance service
+                    // 开启负载均衡的服务线程
                     this.rebalanceService.start();
+
                     // Start push service
+                    // 开启默认的消息发送者实例
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
+
+                    // 启动完后将状态设置为正在运行中
                     this.serviceState = ServiceState.RUNNING;
                     break;
                 case START_FAILED:
@@ -322,7 +362,17 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 启动定时任务：
+     * - 如果没有配置NameServer地址，则定时从指定的地址获取NameServer地址
+     * - 定时从NameServer中获取Topic路由信息，并更新客户端本地缓存
+     * - 定时清理已下线的Broker
+     * - 定时发送心跳到所有的Broker
+     * - 定时持久化消费者的消费偏移量
+     * - 定时调整线程池配置
+     */
     private void startScheduledTask() {
+        // 如果没有配置NameServer地址，则定时从指定的地址获取NameServer地址
         if (null == this.clientConfig.getNamesrvAddr()) {
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
@@ -337,6 +387,7 @@ public class MQClientInstance {
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
 
+        // 定时从NameServer中获取Topic路由信息，并更新客户端本地缓存
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -349,6 +400,7 @@ public class MQClientInstance {
             }
         }, 10, this.clientConfig.getPollNameServerInterval(), TimeUnit.MILLISECONDS);
 
+        // 定时清理已下线的Broker、定时发送心跳到所有的Broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -362,6 +414,7 @@ public class MQClientInstance {
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
+        // 定时持久化消费者的消费偏移量
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -374,6 +427,7 @@ public class MQClientInstance {
             }
         }, 1000 * 10, this.clientConfig.getPersistConsumerOffsetInterval(), TimeUnit.MILLISECONDS);
 
+        // 定时调整线程池配置
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -391,6 +445,9 @@ public class MQClientInstance {
         return clientId;
     }
 
+    /**
+     * 从NameServer获取Topic路由信息，并更新客户端本地缓存
+     */
     public void updateTopicRouteInfoFromNameServer() {
         Set<String> topicList = new HashSet<String>();
 
@@ -404,6 +461,7 @@ public class MQClientInstance {
                     Set<SubscriptionData> subList = impl.subscriptions();
                     if (subList != null) {
                         for (SubscriptionData subData : subList) {
+                            // 消费者订阅的Topic
                             topicList.add(subData.getTopic());
                         }
                     }
@@ -419,12 +477,14 @@ public class MQClientInstance {
                 MQProducerInner impl = entry.getValue();
                 if (impl != null) {
                     Set<String> lst = impl.getPublishTopicList();
+                    // 生产者发送消息的Topic
                     topicList.addAll(lst);
                 }
             }
         }
 
         for (String topic : topicList) {
+            // 从NameServer获取Topic路由信息，并更新客户端本地缓存
             this.updateTopicRouteInfoFromNameServer(topic);
         }
     }
@@ -535,7 +595,8 @@ public class MQClientInstance {
     }
 
     /**
-     * 发送心跳到所有的Broker，包括订阅关系
+     * 发送心跳到所有的Broker，包括订阅关系。
+     * 生产者将客户端ID和所属组发给Broker，Broker会将这些数据和对应的连接缓存起来。
      *
      * 1. 在DefaultMQPushConsumerImpl#start启动后会发送心跳
      * 2. 在DefaultMQPushConsumerImpl#subscribe订阅topic和tag的时候会发送心跳
@@ -587,6 +648,11 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 从NameServer获取Topic路由信息，并更新客户端本地缓存
+     * @param topic
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic) {
         return updateTopicRouteInfoFromNameServer(topic, false, null);
     }
@@ -694,6 +760,13 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 从NameServer获取Topic路由信息，并更新客户端本地缓存
+     * @param topic
+     * @param isDefault
+     * @param defaultMQProducer
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault,
         DefaultMQProducer defaultMQProducer) {
         try {
@@ -826,7 +899,7 @@ public class MQClientInstance {
             }
         }
 
-        // Producer 遍历生产者
+        // Producer 遍历生产者，生产者向Broker发送心跳，只需要把所属Group和客户端ID发送过去就可以
         for (Map.Entry<String/* group */, MQProducerInner> entry : this.producerTable.entrySet()) {
             MQProducerInner impl = entry.getValue();
             if (impl != null) {

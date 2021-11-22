@@ -76,10 +76,16 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
         return false;
     }
 
+    /**
+     * 处理客户端发来的心跳
+     * @param ctx
+     * @param request
+     * @return
+     */
     public RemotingCommand heartBeat(ChannelHandlerContext ctx, RemotingCommand request) {
         // 心跳响应命令
         RemotingCommand response = RemotingCommand.createResponseCommand(null);
-        // 心跳数据
+        // 解码心跳数据
         HeartbeatData heartbeatData = HeartbeatData.decode(request.getBody(), HeartbeatData.class);
         ClientChannelInfo clientChannelInfo = new ClientChannelInfo(
             ctx.channel(),
@@ -138,8 +144,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
 
         // 生产者数据
         for (ProducerData data : heartbeatData.getProducerDataSet()) {
-            // 注册生产者信息
-            // TODO
+            // 注册生产者信息，生产者心跳只有Group名字信息和客户端ID，这里是将生产者组和对应的连接信息缓存以及生产者ID和连接信息缓存起来
             this.brokerController.getProducerManager().registerProducer(data.getGroupName(),
                 clientChannelInfo);
         }

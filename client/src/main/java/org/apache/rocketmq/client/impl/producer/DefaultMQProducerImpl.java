@@ -100,13 +100,29 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     private final InternalLogger log = ClientLogger.getLog();
     private final Random random = new Random();
     private final DefaultMQProducer defaultMQProducer;
+
+    /**
+     * 存储topic和其对应的队列信息
+     */
     private final ConcurrentMap<String/* topic */, TopicPublishInfo> topicPublishInfoTable =
         new ConcurrentHashMap<String, TopicPublishInfo>();
     private final ArrayList<SendMessageHook> sendMessageHookList = new ArrayList<SendMessageHook>();
     private final ArrayList<EndTransactionHook> endTransactionHookList = new ArrayList<EndTransactionHook>();
     private final RPCHook rpcHook;
+
+    /**
+     * 异步发送消息线程池的队列
+     */
     private final BlockingQueue<Runnable> asyncSenderThreadPoolQueue;
+
+    /**
+     * 异步发送消息使用的线程池
+     */
     private final ExecutorService defaultAsyncSenderExecutor;
+
+    /**
+     * 检查过期连接的定时任务线程池
+     */
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
@@ -115,7 +131,15 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     });
     protected BlockingQueue<Runnable> checkRequestQueue;
     protected ExecutorService checkExecutor;
+
+    /**
+     * 消息生产者状态，默认是：服务刚创建，还未启动
+     */
     private ServiceState serviceState = ServiceState.CREATE_JUST;
+
+    /**
+     * MQ客户端实例，管理客户端资源，这里是管理生产者
+     */
     private MQClientInstance mQClientFactory;
     private ArrayList<CheckForbiddenHook> checkForbiddenHookList = new ArrayList<CheckForbiddenHook>();
     private int zipCompressLevel = Integer.parseInt(System.getProperty(MixAll.MESSAGE_COMPRESS_LEVEL, "5"));
@@ -130,7 +154,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         this.defaultMQProducer = defaultMQProducer;
         this.rpcHook = rpcHook;
 
+        // 异步发送消息线程池的队列
         this.asyncSenderThreadPoolQueue = new LinkedBlockingQueue<Runnable>(50000);
+
+        // 异步发送消息使用的线程池
         this.defaultAsyncSenderExecutor = new ThreadPoolExecutor(
             Runtime.getRuntime().availableProcessors(),
             Runtime.getRuntime().availableProcessors(),
@@ -184,23 +211,36 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         log.info("register endTransaction Hook, {}", hook.hookName());
     }
 
+    /**
+     * 启动消息生产者
+     * @throws MQClientException
+     */
     public void start() throws MQClientException {
+        // 启动消息生产者
         this.start(true);
     }
 
+    /**
+     * 启动消息生产者
+     * @param startFactory
+     * @throws MQClientException
+     */
     public void start(final boolean startFactory) throws MQClientException {
         switch (this.serviceState) {
             case CREATE_JUST:
                 this.serviceState = ServiceState.START_FAILED;
 
+                // 检查生产者配置
                 this.checkConfig();
 
                 if (!this.defaultMQProducer.getProducerGroup().equals(MixAll.CLIENT_INNER_PRODUCER_GROUP)) {
                     this.defaultMQProducer.changeInstanceNameToPID();
                 }
 
+                // 实例生成后会缓存起来
                 this.mQClientFactory = MQClientManager.getInstance().getOrCreateMQClientInstance(this.defaultMQProducer, rpcHook);
 
+                // 将生产者注册到MQClientInstance中缓存起来
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -209,14 +249,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         null);
                 }
 
+                // 启动的时候将当前topic放到topicPublishInfoTable缓存中
                 this.topicPublishInfoTable.put(this.defaultMQProducer.getCreateTopicKey(), new TopicPublishInfo());
 
+                // 启动MQ客户端实例
                 if (startFactory) {
                     mQClientFactory.start();
                 }
 
                 log.info("the producer [{}] start OK. sendMessageWithVIPChannel={}", this.defaultMQProducer.getProducerGroup(),
                     this.defaultMQProducer.isSendMessageWithVIPChannel());
+                // 启动完成后，设置状态为运行中
                 this.serviceState = ServiceState.RUNNING;
                 break;
             case RUNNING:
@@ -230,18 +273,24 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 break;
         }
 
+        // 启动完成后，向所有的Broker发送心跳消息
         this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
 
+        // 启动完成后，开启定时任务的执行
         this.startScheduledTask();
 
     }
 
+    /**
+     * 开启定时任务，用来扫描过期请求
+     */
     private void startScheduledTask() {
         if (RequestFutureTable.getProducerNum().incrementAndGet() == 1) {
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
                 @Override
                 public void run() {
                     try {
+                        // 扫描过期请求
                         RequestFutureTable.scanExpiredRequest();
                     } catch (Throwable e) {
                         log.error("scan RequestFutureTable exception", e);

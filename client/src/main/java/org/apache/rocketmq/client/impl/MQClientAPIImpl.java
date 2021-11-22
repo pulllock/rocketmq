@@ -174,6 +174,9 @@ public class MQClientAPIImpl {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
     }
 
+    /**
+     * Netty客户端对象
+     */
     private final RemotingClient remotingClient;
     private final TopAddressing topAddressing;
     /**
@@ -188,10 +191,15 @@ public class MQClientAPIImpl {
         RPCHook rpcHook, final ClientConfig clientConfig) {
         this.clientConfig = clientConfig;
         topAddressing = new TopAddressing(MixAll.getWSAddr(), clientConfig.getUnitName());
+
+        // 创建Netty客户端对象
         this.remotingClient = new NettyRemotingClient(nettyClientConfig, null);
         this.clientRemotingProcessor = clientRemotingProcessor;
 
+        // 注册RPC钩子
         this.remotingClient.registerRPCHook(rpcHook);
+
+        // 注册检查事务状态的处理器
         this.remotingClient.registerProcessor(RequestCode.CHECK_TRANSACTION_STATE, this.clientRemotingProcessor, null);
 
         this.remotingClient.registerProcessor(RequestCode.NOTIFY_CONSUMER_IDS_CHANGED, this.clientRemotingProcessor, null);
@@ -215,12 +223,17 @@ public class MQClientAPIImpl {
         return remotingClient;
     }
 
+    /**
+     * 从指定的地址获取NameServer的地址
+     * @return
+     */
     public String fetchNameServerAddr() {
         try {
             String addrs = this.topAddressing.fetchNSAddr();
             if (addrs != null) {
                 if (!addrs.equals(this.nameSrvAddr)) {
                     log.info("name server address changed, old=" + this.nameSrvAddr + ", new=" + addrs);
+                    // 更新缓存中的NameServer地址
                     this.updateNameServerAddressList(addrs);
                     this.nameSrvAddr = addrs;
                     return nameSrvAddr;
@@ -232,13 +245,21 @@ public class MQClientAPIImpl {
         return nameSrvAddr;
     }
 
+    /**
+     * 更新nameserver地址列表
+     * @param addrs
+     */
     public void updateNameServerAddressList(final String addrs) {
         String[] addrArray = addrs.split(";");
         List<String> list = Arrays.asList(addrArray);
         this.remotingClient.updateNameServerAddressList(list);
     }
 
+    /**
+     * 启动通信用的客户端
+     */
     public void start() {
+        // Netty客户端启动
         this.remotingClient.start();
     }
 
@@ -1029,7 +1050,7 @@ public class MQClientAPIImpl {
         // 心跳请求命令
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.HEART_BEAT, null);
         request.setLanguage(clientConfig.getLanguage());
-        // 心跳数据
+        // 心跳数据编码
         request.setBody(heartbeatData.encode());
         // 同步发送心跳数据
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);

@@ -37,8 +37,16 @@ public class ProducerManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final long CHANNEL_EXPIRED_TIMEOUT = 1000 * 120;
     private static final int GET_AVAILABLE_CHANNEL_RETRY_COUNT = 3;
+
+    /**
+     * 存放生产者Group名字和生产者连接信息对应关系
+     */
     private final ConcurrentHashMap<String /* group name */, ConcurrentHashMap<Channel, ClientChannelInfo>> groupChannelTable =
         new ConcurrentHashMap<>();
+
+    /**
+     * 生产者的ID和通道对应关系
+     */
     private final ConcurrentHashMap<String, Channel> clientChannelTable = new ConcurrentHashMap<>();
     private PositiveAtomicCounter positiveAtomicCounter = new PositiveAtomicCounter();
 
@@ -94,6 +102,11 @@ public class ProducerManager {
         }
     }
 
+    /**
+     * 将生产者连接注册到当前Broker中，也就是缓存起来
+     * @param group 生产者所属的组
+     * @param clientChannelInfo 生产者的连接信息
+     */
     public synchronized void registerProducer(final String group, final ClientChannelInfo clientChannelInfo) {
         ClientChannelInfo clientChannelInfoFound = null;
 

@@ -29,7 +29,9 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
 /**
- * HA master服务端，负责master和slave之间的同步请求的处理
+ * HA master服务端：
+ * - 接受slave上报偏移量的请求
+ * - 向slave发送数据
  */
 public class HAConnection {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
