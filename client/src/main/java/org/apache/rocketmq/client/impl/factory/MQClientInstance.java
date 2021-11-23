@@ -523,6 +523,8 @@ public class MQClientInstance {
 
     /**
      * Remove offline broker
+     * 清理下线的Broker，将brokerAddrTable中的Broker数据拿出来，到topicRouteTable中查询有没有，
+     * 如果不在topicRouteTable中存在，则说明Broker下线了。
      */
     private void cleanOfflineBroker() {
         try {
@@ -530,6 +532,7 @@ public class MQClientInstance {
                 try {
                     ConcurrentHashMap<String, HashMap<Long, String>> updatedTable = new ConcurrentHashMap<String, HashMap<Long, String>>();
 
+                    // brokerAddrTable中存储着Broker信息
                     Iterator<Entry<String, HashMap<Long, String>>> itBrokerTable = this.brokerAddrTable.entrySet().iterator();
                     while (itBrokerTable.hasNext()) {
                         Entry<String, HashMap<Long, String>> entry = itBrokerTable.next();
@@ -543,20 +546,24 @@ public class MQClientInstance {
                         while (it.hasNext()) {
                             Entry<Long, String> ee = it.next();
                             String addr = ee.getValue();
+                            // 看Broker的地址在不在topicRouteTable中，如果不在Topic路由信息表中，说明Broker不存在了，将Broker移除掉
                             if (!this.isBrokerAddrExistInTopicRouteTable(addr)) {
                                 it.remove();
                                 log.info("the broker addr[{} {}] is offline, remove it", brokerName, addr);
                             }
                         }
 
+                        // 同一个BrokerName下面的所有Broker实例都下线了，将Broker移除掉
                         if (cloneAddrTable.isEmpty()) {
                             itBrokerTable.remove();
                             log.info("the broker[{}] name's host is offline, remove it", brokerName);
                         } else {
+                            // 部分Broker实例下线或者没有Broker下线，都会进行更新，替换掉旧的数据
                             updatedTable.put(brokerName, cloneAddrTable);
                         }
                     }
 
+                    // 替换掉旧的Broker数据
                     if (!updatedTable.isEmpty()) {
                         this.brokerAddrTable.putAll(updatedTable);
                     }
