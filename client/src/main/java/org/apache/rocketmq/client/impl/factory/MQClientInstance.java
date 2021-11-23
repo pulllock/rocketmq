@@ -136,7 +136,7 @@ public class MQClientInstance {
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
 
     /**
-     * 获取Topic路由信息时要加的锁
+     * 从NameServer获取Topic路由信息时要加的锁
      */
     private final Lock lockNamesrv = new ReentrantLock();
 
@@ -241,6 +241,12 @@ public class MQClientInstance {
             MQVersion.getVersionDesc(MQVersion.CURRENT_VERSION), RemotingCommand.getSerializeTypeConfigInThisServer());
     }
 
+    /**
+     * TopicRouteData转成TopicPublishInfo，生产者用
+     * @param topic
+     * @param route
+     * @return
+     */
     public static TopicPublishInfo topicRouteData2TopicPublishInfo(final String topic, final TopicRouteData route) {
         TopicPublishInfo info = new TopicPublishInfo();
         info.setTopicRouteData(route);
@@ -290,6 +296,12 @@ public class MQClientInstance {
         return info;
     }
 
+    /**
+     * TopicRouteData转成Set<MessageQueue>，消费者用
+     * @param topic
+     * @param route
+     * @return
+     */
     public static Set<MessageQueue> topicRouteData2TopicSubscribeInfo(final String topic, final TopicRouteData route) {
         Set<MessageQueue> mqList = new HashSet<MessageQueue>();
         List<QueueData> qds = route.getQueueDatas();
@@ -788,15 +800,18 @@ public class MQClientInstance {
                         // 从NameServer获取新的topic路由信息
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
+
+                    // 从NameServer中获取到最新的Topic路由信息后，要看需不需要替换掉当前实例缓存的旧的路由信息
                     if (topicRouteData != null) {
 
-                        // 旧的topic路由信息
+                        // topicRouteTable中缓存着topic路由信息
                         TopicRouteData old = this.topicRouteTable.get(topic);
 
                         // 对比新获取的和旧的路由信息是否有变化
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
-                            // 如果新获取的和旧的路由信息没有变化，就看下是否需要更新topic的路由信息
+                            // 如果NameServer上的Topic路由信息和当前实例缓存的Topic路由信息一样，还需要继续看下是否需要更新
+                            // TODO 为什么这里还需要查询？
                             changed = this.isNeedUpdateTopicRouteInfo(topic);
                         } else {
                             log.info("the topic[{}] route info changed, old[{}] ,new[{}]", topic, old, topicRouteData);
@@ -821,6 +836,7 @@ public class MQClientInstance {
                                     Entry<String, MQProducerInner> entry = it.next();
                                     MQProducerInner impl = entry.getValue();
                                     if (impl != null) {
+                                        // 更新生产者的topicPublishInfoTable缓存
                                         impl.updateTopicPublishInfo(topic, publishInfo);
                                     }
                                 }
@@ -835,12 +851,13 @@ public class MQClientInstance {
                                     Entry<String, MQConsumerInner> entry = it.next();
                                     MQConsumerInner impl = entry.getValue();
                                     if (impl != null) {
+                                        // 更新消费者的topicSubscribeInfoTable缓存
                                         impl.updateTopicSubscribeInfo(topic, subscribeInfo);
                                     }
                                 }
                             }
                             log.info("topicRouteTable.put. Topic = {}, TopicRouteData[{}]", topic, cloneTopicRouteData);
-                            // 更新topic路由信息
+                            // 更新topic路由信息缓存
                             this.topicRouteTable.put(topic, cloneTopicRouteData);
                             return true;
                         }
@@ -975,6 +992,12 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 对比新旧数据，看有没有变化
+     * @param olddata
+     * @param nowdata
+     * @return
+     */
     private boolean topicRouteDataIsChange(TopicRouteData olddata, TopicRouteData nowdata) {
         if (olddata == null || nowdata == null)
             return true;

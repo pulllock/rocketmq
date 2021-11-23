@@ -1387,24 +1387,52 @@ public class MQClientAPIImpl {
         return getTopicRouteInfoFromNameServer(topic, timeoutMillis, false);
     }
 
+    /**
+     * 从NameServer获取Topic路由信息
+     * @param topic
+     * @param timeoutMillis
+     * @return
+     * @throws RemotingException
+     * @throws MQClientException
+     * @throws InterruptedException
+     */
     public TopicRouteData getTopicRouteInfoFromNameServer(final String topic, final long timeoutMillis)
         throws RemotingException, MQClientException, InterruptedException {
 
         return getTopicRouteInfoFromNameServer(topic, timeoutMillis, true);
     }
 
+    /**
+     * 从NameServer获取Topic路由信息
+     * @param topic
+     * @param timeoutMillis
+     * @param allowTopicNotExist
+     * @return
+     * @throws MQClientException
+     * @throws InterruptedException
+     * @throws RemotingTimeoutException
+     * @throws RemotingSendRequestException
+     * @throws RemotingConnectException
+     */
     public TopicRouteData getTopicRouteInfoFromNameServer(final String topic, final long timeoutMillis,
         boolean allowTopicNotExist) throws MQClientException, InterruptedException, RemotingTimeoutException, RemotingSendRequestException, RemotingConnectException {
         // 获取路由信息的请求头
         GetRouteInfoRequestHeader requestHeader = new GetRouteInfoRequestHeader();
+
+        // 要获取的Topic
         requestHeader.setTopic(topic);
 
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.GET_ROUTEINFO_BY_TOPIC, requestHeader);
 
-        // 同步发送请求，参数addr为null表示从broker进行获取
+        /*
+            同步发送请求，参数addr为null，NameServer有多个，每个客户端只会和一个NameServer进行通信，
+            每个客户端都会缓存一个对应的NameServer的地址，所以这里为null，如果能找到缓存的就使用缓存
+            的NameServer地址，如果没有缓存，就从NameServer列表中找一个使用，并缓存起来。
+         */
         RemotingCommand response = this.remotingClient.invokeSync(null, request, timeoutMillis);
         assert response != null;
         switch (response.getCode()) {
+            // Topic不存在
             case ResponseCode.TOPIC_NOT_EXIST: {
                 if (allowTopicNotExist) {
                     log.warn("get Topic [{}] RouteInfoFromNameServer is not exist value", topic);
@@ -1412,6 +1440,7 @@ public class MQClientAPIImpl {
 
                 break;
             }
+            // 成功
             case ResponseCode.SUCCESS: {
                 byte[] body = response.getBody();
                 if (body != null) {

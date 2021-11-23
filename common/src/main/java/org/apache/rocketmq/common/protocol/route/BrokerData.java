@@ -23,6 +23,9 @@ import java.util.List;
 import java.util.Random;
 import org.apache.rocketmq.common.MixAll;
 
+/**
+ * Broker信息
+ */
 public class BrokerData implements Comparable<BrokerData> {
 
     /**

@@ -59,7 +59,7 @@ public class RouteInfoManager {
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
-     * topic消息队列路由信息
+     * topic消息队列路由信息，也就是Topic对应的队列的信息。
      * 包括：topic所在的broker名称；读队列数量；写队列数量；同步标记信息。
      * RocketMQ根据topicQueueTable的信息进行负载均衡消息发送。
      */
@@ -498,7 +498,7 @@ public class RouteInfoManager {
         try {
             try {
                 this.lock.readLock().lockInterruptibly();
-                // topicQueueTable中存的是topic -> List<QueueData>对应关系
+                // topicQueueTable中存的是topic -> List<QueueData>对应关系，也就是Topic对应的队列的信息
                 List<QueueData> queueDataList = this.topicQueueTable.get(topic);
                 if (queueDataList != null) {
                     topicRouteData.setQueueDatas(queueDataList);
@@ -510,8 +510,9 @@ public class RouteInfoManager {
                         brokerNameSet.add(qd.getBrokerName());
                     }
 
-                    // BrokerData
+                    // BrokerData 查询Broker的信息
                     for (String brokerName : brokerNameSet) {
+                        // brokerAddrTable中缓存的是Broker的名字和Broker信息的关系
                         BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                         if (null != brokerData) {
                             BrokerData brokerDataClone = new BrokerData(brokerData.getCluster(), brokerData.getBrokerName(), (HashMap<Long, String>) brokerData
@@ -535,6 +536,7 @@ public class RouteInfoManager {
 
         log.debug("pickupTopicRouteData {} {}", topic, topicRouteData);
 
+        // 队列信息和Broker信息都要有才可以
         if (foundBrokerData && foundQueueData) {
             return topicRouteData;
         }

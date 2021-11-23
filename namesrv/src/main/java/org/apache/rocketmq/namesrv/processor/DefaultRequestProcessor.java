@@ -452,11 +452,14 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
      */
     public RemotingCommand getRouteInfoByTopic(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
+        // 响应命令
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+
+        // 解码请求头
         final GetRouteInfoRequestHeader requestHeader =
             (GetRouteInfoRequestHeader) request.decodeCommandCustomHeader(GetRouteInfoRequestHeader.class);
 
-        // 根据topic获取路由信息
+        // 根据topic从缓存中获取路由信息，NameServer缓存的都是Broker发送过来的信息
         TopicRouteData topicRouteData = this.namesrvController.getRouteInfoManager().pickupTopicRouteData(requestHeader.getTopic());
 
         if (topicRouteData != null) {

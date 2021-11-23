@@ -103,6 +103,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
     /**
      * 存储topic和其对应的队列信息
+     * TODO 什么时候会变化？
      */
     private final ConcurrentMap<String/* topic */, TopicPublishInfo> topicPublishInfoTable =
         new ConcurrentHashMap<String, TopicPublishInfo>();

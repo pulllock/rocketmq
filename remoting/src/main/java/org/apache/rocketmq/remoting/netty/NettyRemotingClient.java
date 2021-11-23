@@ -409,8 +409,11 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     public RemotingCommand invokeSync(String addr, final RemotingCommand request, long timeoutMillis)
         throws InterruptedException, RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException {
         long beginStartTime = System.currentTimeMillis();
-        /**
-         * 1.  getTopicRouteInfoFromNameServer 的时候addr传的是null
+        /*
+            getTopicRouteInfoFromNameServer的时候参数addr为null。
+            NameServer有多个，每个客户端只会和一个NameServer进行通信，
+            每个客户端都会缓存一个对应的NameServer的地址，所以这里为null，如果能找到缓存的就使用缓存
+            的NameServer地址，如果没有缓存，就从NameServer列表中找一个使用，并缓存起来。
          */
         final Channel channel = this.getAndCreateChannel(addr);
         if (channel != null && channel.isActive()) {
@@ -446,8 +449,11 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     }
 
     private Channel getAndCreateChannel(final String addr) throws RemotingConnectException, InterruptedException {
-        /**
-         * 1. getTopicRouteInfoFromNameServer 的时候addr传的是null
+        /*
+            getTopicRouteInfoFromNameServer的时候参数addr为null。
+            NameServer有多个，每个客户端只会和一个NameServer进行通信，
+            每个客户端都会缓存一个对应的NameServer的地址，所以这里为null，如果能找到缓存的就使用缓存
+            的NameServer地址，如果没有缓存，就从NameServer列表中找一个使用，并缓存起来。
          */
         if (null == addr) {
             return getAndCreateNameserverChannel();
@@ -461,6 +467,13 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         return this.createChannel(addr);
     }
 
+    /**
+     * 从缓存获取当前实例对应的NameServer地址或者如果缓存中不存在就从NameServer列表中找一个，
+     * 找到后建立连接
+     * @return
+     * @throws RemotingConnectException
+     * @throws InterruptedException
+     */
     private Channel getAndCreateNameserverChannel() throws RemotingConnectException, InterruptedException {
         // 一个实例只和一台NameServer服务器进行通信，namesrvAddrChoosed会缓存当前进行通信的NameServer
         String addr = this.namesrvAddrChoosed.get();
