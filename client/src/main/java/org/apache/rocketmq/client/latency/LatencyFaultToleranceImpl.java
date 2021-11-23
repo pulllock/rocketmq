@@ -24,7 +24,14 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.rocketmq.client.common.ThreadLocalIndex;
 
+/**
+ * 延迟容错实现类，保存了有问题的队列
+ */
 public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> {
+
+    /**
+     * 保存有问题的Broker
+     */
     private final ConcurrentHashMap<String, FaultItem> faultItemTable = new ConcurrentHashMap<String, FaultItem>(16);
 
     private final ThreadLocalIndex whichItemWorst = new ThreadLocalIndex();
@@ -53,6 +60,13 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
     }
 
+    /**
+     * 查看Broker是否可用：
+     * - Broker没有信息在当前的faultItemTable中，则Broker是可用的
+     * - Broker在当前的faultItemTable中，说明之前这个Broker不可用，现在在判断下是否可用
+     * @param name brokerName
+     * @return
+     */
     @Override
     public boolean isAvailable(final String name) {
         // isAvailable使用的是FaultItem中的方法，其中的startTimestamp是在updateFaultItem方法中计算出来的
@@ -68,6 +82,10 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         this.faultItemTable.remove(name);
     }
 
+    /**
+     * 尝试从不可用的Broker中选出来一个
+     * @return
+     */
     @Override
     public String pickOneAtLeast() {
         final Enumeration<FaultItem> elements = this.faultItemTable.elements();

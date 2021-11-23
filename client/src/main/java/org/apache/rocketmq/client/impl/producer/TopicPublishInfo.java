@@ -116,10 +116,16 @@ public class TopicPublishInfo {
                     return mq;
                 }
             }
+
+            // 上面循环遍历完了，都没能找到一个可用的队列，直接按照轮询的方式返回一个队列，不管可用不可用。
             return selectOneMessageQueue();
         }
     }
 
+    /**
+     * 轮询的方式选择一个队列
+     * @return
+     */
     public MessageQueue selectOneMessageQueue() {
         // sendWhichQueue是一个ThreadLocal，存储自增值，自增值第一次使用Random类随机取值
         // 如果消息发送触发了重试机制，每次就自增取值

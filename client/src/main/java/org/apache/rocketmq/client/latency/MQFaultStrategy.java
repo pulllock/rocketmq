@@ -27,8 +27,15 @@ import org.apache.rocketmq.common.message.MessageQueue;
  */
 public class MQFaultStrategy {
     private final static InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 故障延迟容错实现类
+     */
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
 
+    /**
+     * 是否启用故障延迟机制
+     */
     private boolean sendLatencyFaultEnable = false;
 
     /**
@@ -64,7 +71,7 @@ public class MQFaultStrategy {
     }
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
-        // 如果启用了broker故障延迟机制
+        // 启用了broker故障延迟机制
         if (this.sendLatencyFaultEnable) {
             try {
                 // 获取自增值，然后跟队列长度取模，来获取一个队列
@@ -76,13 +83,15 @@ public class MQFaultStrategy {
                     MessageQueue mq = tpInfo.getMessageQueueList().get(pos);
                     // 校验下队列是否可用
                     if (latencyFaultTolerance.isAvailable(mq.getBrokerName()))
+                        // 如果选择的队列可用，直接返回
                         return mq;
                 }
 
-                // 如果所有队列都不可用，尝试从失败的broker列表中选择一个broker
+                // 如果所有队列都不可用，尝试从失败的broker列表中选择一个broker，假装可用
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
+                    // 轮询的方式选择一个队列
                     final MessageQueue mq = tpInfo.selectOneMessageQueue();
                     if (notBestBroker != null) {
                         mq.setBrokerName(notBestBroker);
@@ -90,17 +99,17 @@ public class MQFaultStrategy {
                     }
                     return mq;
                 } else {
-                    // 从失败条目中移除已经恢复的broker
                     latencyFaultTolerance.remove(notBestBroker);
                 }
             } catch (Exception e) {
                 log.error("Error occurred when selecting message queue", e);
             }
 
+            // 如果上面都没选出来或者发生了异常，就按照轮询方式直接选一个出来
             return tpInfo.selectOneMessageQueue();
         }
 
-        // 如果没有启用broker故障延迟机制，也是默认的机制
+        // 没有启用broker故障延迟机制，默认的机制，直接轮询取一个
         return tpInfo.selectOneMessageQueue(lastBrokerName);
     }
 
