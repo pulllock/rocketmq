@@ -444,12 +444,24 @@ public abstract class NettyRemotingAbstract {
         }
     }
 
+    /**
+     * 同步调用
+     * @param channel
+     * @param request
+     * @param timeoutMillis
+     * @return
+     * @throws InterruptedException
+     * @throws RemotingSendRequestException
+     * @throws RemotingTimeoutException
+     */
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,
         final long timeoutMillis)
         throws InterruptedException, RemotingSendRequestException, RemotingTimeoutException {
+        // 请求ID
         final int opaque = request.getOpaque();
 
         try {
+            // 异步响应结果对对象
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis, null, null);
             // 响应缓存表：requestId和responseFuture对应关系
             this.responseTable.put(opaque, responseFuture);
@@ -491,10 +503,22 @@ public abstract class NettyRemotingAbstract {
         }
     }
 
+    /**
+     * 异步调用
+     * @param channel
+     * @param request
+     * @param timeoutMillis
+     * @param invokeCallback
+     * @throws InterruptedException
+     * @throws RemotingTooMuchRequestException
+     * @throws RemotingTimeoutException
+     * @throws RemotingSendRequestException
+     */
     public void invokeAsyncImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis,
         final InvokeCallback invokeCallback)
         throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
         long beginStartTime = System.currentTimeMillis();
+        // 请求id
         final int opaque = request.getOpaque();
         boolean acquired = this.semaphoreAsync.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
         if (acquired) {
@@ -505,16 +529,21 @@ public abstract class NettyRemotingAbstract {
                 throw new RemotingTimeoutException("invokeAsyncImpl call timeout");
             }
 
+            // 创建一个异步响应对象
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis - costTime, invokeCallback, once);
+            // 将异步响应对象和请求ID放到responseTable中
             this.responseTable.put(opaque, responseFuture);
             try {
+                // 发送请求
                 channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture f) throws Exception {
                         if (f.isSuccess()) {
+                            // 请求成功
                             responseFuture.setSendRequestOK(true);
                             return;
                         }
+                        // 请求失败
                         requestFail(opaque);
                         log.warn("send a request command to channel <{}> failed.", RemotingHelper.parseChannelRemoteAddr(channel));
                     }

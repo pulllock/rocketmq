@@ -492,6 +492,7 @@ public class MQClientAPIImpl {
 
         switch (communicationMode) {
             case ONEWAY:
+                // 单向发送
                 this.remotingClient.invokeOneway(addr, request, timeoutMillis);
                 return null;
             case ASYNC:
@@ -500,6 +501,7 @@ public class MQClientAPIImpl {
                 if (timeoutMillis < costTimeAsync) {
                     throw new RemotingTooMuchRequestException("sendMessage call timeout");
                 }
+                // 异步发送
                 this.sendMessageAsync(addr, brokerName, msg, timeoutMillis - costTimeAsync, request, sendCallback, topicPublishInfo, instance,
                     retryTimesWhenSendFailed, times, context, producer);
                 return null;
@@ -508,6 +510,7 @@ public class MQClientAPIImpl {
                 if (timeoutMillis < costTimeSync) {
                     throw new RemotingTooMuchRequestException("sendMessage call timeout");
                 }
+                // 同步发送
                 return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTimeSync, request);
             default:
                 assert false;
@@ -517,6 +520,18 @@ public class MQClientAPIImpl {
         return null;
     }
 
+    /**
+     * 同步发送消息
+     * @param addr
+     * @param brokerName
+     * @param msg
+     * @param timeoutMillis
+     * @param request
+     * @return
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     private SendResult sendMessageSync(
         final String addr,
         final String brokerName,
@@ -524,11 +539,30 @@ public class MQClientAPIImpl {
         final long timeoutMillis,
         final RemotingCommand request
     ) throws RemotingException, MQBrokerException, InterruptedException {
+        // 同步调用
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
         assert response != null;
+        // 处理返回结果
         return this.processSendResponse(brokerName, msg, response,addr);
     }
 
+    /**
+     * 异步发送消息
+     * @param addr
+     * @param brokerName
+     * @param msg
+     * @param timeoutMillis
+     * @param request
+     * @param sendCallback
+     * @param topicPublishInfo
+     * @param instance
+     * @param retryTimesWhenSendFailed
+     * @param times
+     * @param context
+     * @param producer
+     * @throws InterruptedException
+     * @throws RemotingException
+     */
     private void sendMessageAsync(
         final String addr,
         final String brokerName,
@@ -544,14 +578,18 @@ public class MQClientAPIImpl {
         final DefaultMQProducerImpl producer
     ) throws InterruptedException, RemotingException {
         final long beginStartTime = System.currentTimeMillis();
+        // 异步发送消息
         this.remotingClient.invokeAsync(addr, request, timeoutMillis, new InvokeCallback() {
+            // 异步发送完的回调
             @Override
             public void operationComplete(ResponseFuture responseFuture) {
                 long cost = System.currentTimeMillis() - beginStartTime;
+                // 异步发送完后的响应
                 RemotingCommand response = responseFuture.getResponseCommand();
                 if (null == sendCallback && response != null) {
 
                     try {
+                        // 处理发送完的结果
                         SendResult sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
                         if (context != null && sendResult != null) {
                             context.setSendResult(sendResult);
@@ -662,6 +700,16 @@ public class MQClientAPIImpl {
         }
     }
 
+    /**
+     * 处理发送完的响应结果
+     * @param brokerName
+     * @param msg
+     * @param response
+     * @param addr
+     * @return
+     * @throws MQBrokerException
+     * @throws RemotingCommandException
+     */
     private SendResult processSendResponse(
         final String brokerName,
         final Message msg,
