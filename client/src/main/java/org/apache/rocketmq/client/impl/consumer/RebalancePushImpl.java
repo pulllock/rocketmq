@@ -48,7 +48,7 @@ public class RebalancePushImpl extends RebalanceImpl {
     }
 
     /**
-     *
+     * 消息队列有变化，有新增或者有移除，需要通知Broker
      * @param topic
      * @param mqAll
      * @param mqDivided
@@ -85,9 +85,16 @@ public class RebalancePushImpl extends RebalanceImpl {
         }
 
         // notify broker
+        // 通知Broker有变化
         this.getmQClientFactory().sendHeartbeatToAllBrokerWithLock();
     }
 
+    /**
+     * 移除消息队列
+     * @param mq
+     * @param pq
+     * @return
+     */
     @Override
     public boolean removeUnnecessaryMessageQueue(MessageQueue mq, ProcessQueue pq) {
         this.defaultMQPushConsumerImpl.getOffsetStore().persist(mq);
@@ -158,6 +165,12 @@ public class RebalancePushImpl extends RebalanceImpl {
         return result;
     }
 
+    /**
+     * 计算新的消息队列从哪里开始拉消息
+     * @param mq
+     * @return
+     * @throws MQClientException
+     */
     @Override
     public long computePullFromWhereWithException(MessageQueue mq) throws MQClientException {
         long result = -1;
@@ -168,7 +181,8 @@ public class RebalancePushImpl extends RebalanceImpl {
             case CONSUME_FROM_MIN_OFFSET:
             case CONSUME_FROM_MAX_OFFSET:
             case CONSUME_FROM_LAST_OFFSET: {
-                // 队列最新的偏移量
+                // 从队列最新消费偏移量开始消费
+                // 队列最新的消费进度
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
@@ -197,7 +211,9 @@ public class RebalancePushImpl extends RebalanceImpl {
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
-                } else if (-1 == lastOffset) {
+                }
+                // -1表示该消息队列刚创建
+                else if (-1 == lastOffset) {
                     result = 0L;
                 } else {
                     result = -1;
@@ -208,7 +224,9 @@ public class RebalancePushImpl extends RebalanceImpl {
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
-                } else if (-1 == lastOffset) {
+                }
+                // // -1表示该消息队列刚创建
+                else if (-1 == lastOffset) {
                     if (mq.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                         try {
                             result = this.mQClientFactory.getMQAdminImpl().maxOffset(mq);
@@ -239,10 +257,14 @@ public class RebalancePushImpl extends RebalanceImpl {
         return result;
     }
 
+    /**
+     * 在负载均衡后，新的消费队列开始去消费消息
+     * @param pullRequestList
+     */
     @Override
     public void dispatchPullRequest(List<PullRequest> pullRequestList) {
         for (PullRequest pullRequest : pullRequestList) {
-            // 分发消息拉取请求到阻塞队列中
+            // 分发消息拉取请求到消息拉取服务的队列中
             this.defaultMQPushConsumerImpl.executePullRequestImmediately(pullRequest);
             log.info("doRebalance, {}, add a new pull request {}", consumerGroup, pullRequest);
         }

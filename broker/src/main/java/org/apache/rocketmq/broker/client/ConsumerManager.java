@@ -143,7 +143,10 @@ public class ConsumerManager {
         if (r1 || r2) {
             // 有变化需要通知消费者
             if (isNotifyConsumerIdsChangedEnable) {
-                // invokeOneway通知消费者有变化，消费者可以进行rebalance
+                /*
+                    invokeOneway通知消费者有变化，消费者可以进行rebalance
+                    ConsumerGroupInfo的getAllChannel方法可以获取一个消费组下面所有消费者的Channel
+                 */
                 this.consumerIdsChangeListener.handle(ConsumerGroupEvent.CHANGE, group, consumerGroupInfo.getAllChannel());
             }
         }

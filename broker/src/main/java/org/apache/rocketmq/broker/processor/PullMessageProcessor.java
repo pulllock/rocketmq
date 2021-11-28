@@ -458,7 +458,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     break;
                 case ResponseCode.PULL_NOT_FOUND: // 没查询到消息
 
-                    // Broker允许挂起，并且请求也有允许挂起的标志
+                    // Broker允许挂起，并且请求也有允许挂起的标志，就是基于长轮询的模式
                     if (brokerAllowSuspend && hasSuspendFlag) {
                         // 挂起时间
                         long pollingTimeMills = suspendTimeoutMillisLong;
@@ -473,6 +473,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         PullRequest pullRequest = new PullRequest(request, channel, pollingTimeMills,
                             this.brokerController.getMessageStore().now(), offset, subscriptionData, messageFilter);
                         this.brokerController.getPullRequestHoldService().suspendPullRequest(topic, queueId, pullRequest);
+                        // 响应置为null，不进行响应
                         response = null;
                         break;
                     }

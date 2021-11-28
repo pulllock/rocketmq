@@ -44,6 +44,12 @@ public class MQClientManager {
         return getOrCreateMQClientInstance(clientConfig, null);
     }
 
+    /**
+     * 获取或者创建客户端实例
+     * @param clientConfig
+     * @param rpcHook
+     * @return
+     */
     public MQClientInstance getOrCreateMQClientInstance(final ClientConfig clientConfig, RPCHook rpcHook) {
         // 生成客户端的id，格式：IP@instanceName@unitName，unitName可选
         String clientId = clientConfig.buildMQClientId();

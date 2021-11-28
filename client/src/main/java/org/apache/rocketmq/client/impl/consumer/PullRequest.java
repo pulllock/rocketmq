@@ -19,6 +19,7 @@ package org.apache.rocketmq.client.impl.consumer;
 import org.apache.rocketmq.common.message.MessageQueue;
 
 /**
+ * 消息拉取的请求
  * 两个地方会将PullRequest对象放到pullRequestQueue中：
  * 1. 在RebalanceImpl中
  * 2. RocketMQ根据PullRequest拉取任务执行完一次消息拉取任务之后，又将PullRequest对象放入到pullRequestQueue中

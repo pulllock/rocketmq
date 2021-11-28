@@ -33,6 +33,10 @@ import org.apache.rocketmq.common.utils.ThreadUtils;
  */
 public class PullMessageService extends ServiceThread {
     private final InternalLogger log = ClientLogger.getLog();
+
+    /**
+     * 消息拉取请求队列
+     */
     private final LinkedBlockingQueue<PullRequest> pullRequestQueue = new LinkedBlockingQueue<PullRequest>();
     private final MQClientInstance mQClientFactory;
     /**
@@ -113,6 +117,9 @@ public class PullMessageService extends ServiceThread {
         }
     }
 
+    /**
+     * 开启消息拉取服务
+     */
     @Override
     public void run() {
         log.info(this.getServiceName() + " service started");
@@ -121,6 +128,8 @@ public class PullMessageService extends ServiceThread {
             try {
                 // 从pullRequestQueue中获取一个PullRequest任务进行消息拉取
                 PullRequest pullRequest = this.pullRequestQueue.take();
+
+                // 拉取消息
                 this.pullMessage(pullRequest);
             } catch (InterruptedException ignored) {
             } catch (Exception e) {

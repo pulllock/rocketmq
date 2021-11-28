@@ -20,14 +20,17 @@ public enum ConsumerGroupEvent {
 
     /**
      * Some consumers in the group are changed.
+     * 消费者组里的消费者有变化
      */
     CHANGE,
     /**
      * The group of consumer is unregistered.
+     * 消费者组里有消费者下线了
      */
     UNREGISTER,
     /**
      * The group of consumer is registered.
+     * 消费者组里有消费者注册进来了
      */
     REGISTER
 }

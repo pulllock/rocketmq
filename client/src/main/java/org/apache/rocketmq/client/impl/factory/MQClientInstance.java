@@ -106,7 +106,9 @@ public class MQClientInstance {
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
 
     /**
-     * 使用当前实例的Consumer对象
+     * 使用当前实例的Consumer对象，消费组和消费者实例的对应关系
+     * - 消费者客户端启动的时候，会将消费组和消费者客户端实例注册到缓存中
+     * - 定期从NameServer获取信息，并更新consumerTable缓存
      */
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
 
@@ -901,7 +903,8 @@ public class MQClientInstance {
         // clientID：IP@InstanceName
         heartbeatData.setClientID(this.clientId);
 
-        // Consumer 遍历消费者
+        // Consumer
+        // 遍历消费者，consumerTable中保存着消费组和消费者实例的对应关系
         for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
             MQConsumerInner impl = entry.getValue();
             if (impl != null) {
@@ -1165,10 +1168,16 @@ public class MQClientInstance {
         this.adminExtTable.remove(group);
     }
 
+    /**
+     * 立刻唤醒负载均衡服务
+     */
     public void rebalanceImmediately() {
         this.rebalanceService.wakeup();
     }
 
+    /**
+     * 消费者进行负载均衡
+     */
     public void doRebalance() {
         // 遍历当前实例包含的已注册的消费者，对消费者执行doRebalance方法
         for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {

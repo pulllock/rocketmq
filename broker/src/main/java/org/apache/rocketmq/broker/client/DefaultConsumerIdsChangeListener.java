@@ -37,13 +37,17 @@ public class DefaultConsumerIdsChangeListener implements ConsumerIdsChangeListen
             return;
         }
         switch (event) {
+            // 消费者有变化
             case CHANGE:
                 if (args == null || args.length < 1) {
                     return;
                 }
+                // 消费组里面所有消费者的Channel
                 List<Channel> channels = (List<Channel>) args[0];
                 if (channels != null && brokerController.getBrokerConfig().isNotifyConsumerIdsChangedEnable()) {
+                    // 挨个通知同一个消费组下面的每个消费者，有消费者变化了，消费者会立刻进行负载均衡的处理
                     for (Channel chl : channels) {
+                        // 通知消费者，组里有消费者发生了变化
                         this.brokerController.getBroker2Client().notifyConsumerIdsChanged(chl, group);
                     }
                 }

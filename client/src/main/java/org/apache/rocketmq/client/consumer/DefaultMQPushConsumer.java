@@ -152,6 +152,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     /**
      * Subscription relationship
      * 订阅信息
+     * 这个Map中的数据是通过setSubscription方法设置的，目前该方法已经被废弃掉
      */
     private Map<String /* topic */, String /* sub expression */> subscription = new HashMap<String, String>();
 
@@ -780,9 +781,11 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      * @param subExpression subscription expression.it only support or operation such as "tag1 || tag2 || tag3" <br>
      * if null or * expression,meaning subscribe all
      * @throws MQClientException if there is any client error.
+     * 设置订阅的信息
      */
     @Override
     public void subscribe(String topic, String subExpression) throws MQClientException {
+        // 设置消费者订阅的信息，订阅的信息保存在RebalanceImpl的subscriptionInner中
         this.defaultMQPushConsumerImpl.subscribe(withNamespace(topic), subExpression);
     }
 

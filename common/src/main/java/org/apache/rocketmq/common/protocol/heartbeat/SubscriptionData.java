@@ -26,10 +26,21 @@ import org.apache.rocketmq.common.filter.ExpressionType;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * 用来封装订阅的信息
+ */
 public class SubscriptionData implements Comparable<SubscriptionData> {
     public final static String SUB_ALL = "*";
     private boolean classFilterMode = false;
+
+    /**
+     * 订阅的Topic
+     */
     private String topic;
+
+    /**
+     * 订阅的子表达式
+     */
     private String subString;
     private Set<String> tagsSet = new HashSet<String>();
     private Set<Integer> codeSet = new HashSet<Integer>();

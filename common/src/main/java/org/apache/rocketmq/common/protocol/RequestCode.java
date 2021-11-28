@@ -84,6 +84,10 @@ public class RequestCode {
     public static final int CONSUMER_SEND_MSG_BACK = 36;
 
     public static final int END_TRANSACTION = 37;
+
+    /**
+     * 获取消费组下所有的消费者ID
+     */
     public static final int GET_CONSUMER_LIST_BY_GROUP = 38;
 
     /**
@@ -91,6 +95,9 @@ public class RequestCode {
      */
     public static final int CHECK_TRANSACTION_STATE = 39;
 
+    /**
+     * 通知消费者，组里有消费者发生了变化
+     */
     public static final int NOTIFY_CONSUMER_IDS_CHANGED = 40;
 
     public static final int LOCK_BATCH_MQ = 41;

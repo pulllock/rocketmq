@@ -96,7 +96,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
 
         // 消费者数据
         for (ConsumerData data : heartbeatData.getConsumerDataSet()) {
-            // 获取消费组订阅配置信息
+            // 获取消费者的订阅的信息
             SubscriptionGroupConfig subscriptionGroupConfig =
                 this.brokerController.getSubscriptionGroupManager().findSubscriptionGroupConfig(
                     data.getGroupName());

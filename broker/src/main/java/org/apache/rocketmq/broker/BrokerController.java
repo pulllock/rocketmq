@@ -173,7 +173,7 @@ public class BrokerController {
     private final MessageArrivingListener messageArrivingListener;
 
     /**
-     * Broker主动调用Client使用，比如Broker主动调用生产者回查事务状态
+     * Broker主动调用Client使用，比如Broker主动调用生产者回查事务状态、Broker通知消费者，组里有消费者发生了变化等
      */
     private final Broker2Client broker2Client;
 
